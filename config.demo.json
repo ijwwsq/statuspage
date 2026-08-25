@@ -6,7 +6,7 @@
     "accent": "#18794D",
     "footer_note": "Демонстрационный стенд статус-портала"
   },
-  "metrics": ["gateway", "portal-api", "tableau"],
+  "metrics": ["gateway", "postgres", "redis"],
   "components": [
     { "key": "gateway",    "name": "Веб-портал",          "group": "Портал",                  "description": "Единая точка входа (live-проверка)", "check_url": "http://127.0.0.1:8088/", "expected_status": 200 },
     { "key": "frontend",   "name": "Интерфейс",           "group": "Портал",                  "description": "Серверный рендеринг страниц портала" },
