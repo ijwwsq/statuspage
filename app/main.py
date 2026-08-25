@@ -5,6 +5,8 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from starlette.middleware.gzip import GZipMiddleware
 
 from . import models  # noqa: F401  (регистрация моделей в Base.metadata)
 from . import notify
@@ -24,6 +26,12 @@ async def lifespan(app: FastAPI):
         db_path = settings.database_url.split("///", 1)[-1]
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(engine)
+    # идемпотентные доработки схемы — чтобы обновлять без сноса тома (история сохраняется)
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_status_checks_comp_ts "
+            "ON status_checks (component_id, ts)"
+        ))
     with SessionLocal() as db:
         sync_components(db)
         seed_subscribers(db)
@@ -39,6 +47,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.brand.title, docs_url=None, redoc_url=None, lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
 @app.middleware("http")
