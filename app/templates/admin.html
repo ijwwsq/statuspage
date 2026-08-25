@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Управление · {{ brand.title }}</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="/static/css/status.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand"><span>{{ brand.name }} · управление</span></div>
+      <a href="/" class="btn ghost">← На витрину</a>
+    </header>
+    <main id="admin"><p class="muted center">Загрузка…</p></main>
+  </div>
+  <script type="module" src="/static/js/admin.js"></script>
+</body>
+</html>
