@@ -93,9 +93,11 @@ a { color: inherit; text-decoration: none; }
 .component { padding: 18px 22px; border-top: 1px solid var(--border); transition: background .12s ease; }
 .component:first-child { border-top: none; }
 .component:hover { background: var(--hover); }
-.component .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.component .row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .component .name { font-weight: 500; }
 .component .desc { color: var(--muted); font-size: 13.5px; margin-top: 3px; }
+.cstatus { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; white-space: nowrap; }
+.cuptime { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* тег-чипы статуса */
 .pill {
@@ -137,6 +139,19 @@ a { color: inherit; text-decoration: none; }
 .tip .tip-steps li { padding: 3px 0 3px 12px; border-left: 2px solid var(--border); position: relative; }
 .tip .tip-steps li .s { font-weight: 600; font-size: 11.5px; color: var(--muted); }
 .tip .tip-steps li .b { color: var(--text); }
+
+/* заголовок блока состояния + выбор периода (управляет аптаймом и метриками) */
+.status-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 12px; }
+.status-header .section-title { margin: 0; }
+
+/* легенда цветов */
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 14px; }
+.leg { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.leg-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.leg-dot.u-up { background: var(--up); }
+.leg-dot.u-partial { background: var(--partial); }
+.leg-dot.u-down { background: var(--down); }
+.leg-dot.u-unknown { background: var(--unknown); }
 
 /* метрики */
 .metrics-wrap { margin-top: 8px; }

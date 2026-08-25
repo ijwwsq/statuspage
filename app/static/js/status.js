@@ -12,8 +12,9 @@ const subscribe = document.getElementById('subscribe');
 let incidentIndex = new Map();   // key компонента -> [инциденты]
 let brand = {};
 let metricsData = [];
-let metricPeriod = 30;
-const PERIODS = [[7, '7 дней'], [30, '30 дней'], [90, '90 дней']];
+let uptimeGran = '90d';   // единая гранулярность для аптайма и метрик
+let lastData = null;
+const UPTIME_GRAN = [['24h', '24 часа'], ['30d', '30 дней'], ['90d', '90 дней']];
 
 function el(tag, cls, html) {
   const n = document.createElement(tag);
@@ -60,39 +61,70 @@ function incidentDates(key) {
 
 // ---- тултип по засечке (стиль Atlassian: что было в этот день) --------------
 
-function tickTooltip(ds) {
-  const date = new Date(ds.date + 'T00:00:00');
-  const dateStr = date.toLocaleDateString('ru-RU', {
-    weekday: 'short', day: 'numeric', month: 'long',
+function incidentsInRange(key, startMs, endMs) {
+  const nowMs = Date.now();
+  return (incidentIndex.get(key) || []).filter((inc) => {
+    const c = Date.parse(inc.created_at);
+    const r = inc.resolved_at ? Date.parse(inc.resolved_at) : nowMs;
+    return c <= endMs && r >= startMs;
   });
+}
 
-  const statusDot = { up: 'var(--up)', partial: 'var(--partial)', down: 'var(--down)', unknown: 'var(--unknown)' }[ds.status];
-  let upLine;
-  if (ds.status === 'unknown') upLine = 'Нет данных';
-  else if (ds.status === 'up') upLine = 'Работал штатно · 100%';
-  else upLine = `${Number(ds.uptime).toFixed(2)}% аптайм`;
+function incidentHourSet(key, entries) {
+  const set = new Set();
+  for (const e of entries) {
+    const s = Date.parse(e.time);
+    if (incidentsInRange(key, s, s + 3600000).length) set.add(e.time);
+  }
+  return set;
+}
 
-  let html =
-    `<div class="tip-date">${escapeHtml(dateStr)}</div>` +
-    `<div class="tip-up"><span class="dot" style="background:${statusDot}"></span>${escapeHtml(upLine)}</div>`;
+function headHtml(label, status, uptime) {
+  const dot = { up: 'var(--up)', partial: 'var(--partial)', down: 'var(--down)', unknown: 'var(--unknown)' }[status];
+  let up;
+  if (status === 'unknown') up = 'Нет данных';
+  else if (status === 'up') up = 'Работал штатно · 100%';
+  else up = `${Number(uptime).toFixed(2)}%`;
+  return `<div class="tip-date">${escapeHtml(label)}</div>` +
+    `<div class="tip-up"><span class="dot" style="background:${dot}"></span>${escapeHtml(up)}</div>`;
+}
 
-  for (const inc of incidentsOnDay(ds.key, ds.date)) {
-    const badge = inc.status === 'resolved' ? 'none' : inc.impact;
-    html += `<div class="tip-inc"><div class="t">${escapeHtml(inc.title)}` +
-      `<span class="badge ${badge}">${escapeHtml(INCIDENT_STATUS[inc.status] || inc.status)}</span></div>`;
-    const dayUpdates = inc.updates.filter((u) => dayOf(u.created_at) === ds.date);
-    if (dayUpdates.length) {
-      html += '<ul class="tip-steps">';
-      for (const u of dayUpdates) {
-        const body = u.body.length > 150 ? u.body.slice(0, 150) + '…' : u.body;
-        html += `<li><span class="s">${escapeHtml(INCIDENT_STATUS[u.status] || u.status)}</span> ` +
-          `<span class="b">${escapeHtml(body)}</span></li>`;
-      }
-      html += '</ul>';
-    } else {
-      html += `<div class="muted" style="margin-top:4px">Продолжался · статус: ${escapeHtml(INCIDENT_STATUS[inc.status] || inc.status)}</div>`;
+function stepsHtml(inc, showUpdate) {
+  const badge = inc.status === 'resolved' ? 'none' : inc.impact;
+  let html = `<div class="tip-inc"><div class="t">${escapeHtml(inc.title)}` +
+    `<span class="badge ${badge}">${escapeHtml(INCIDENT_STATUS[inc.status] || inc.status)}</span></div>`;
+  const ups = inc.updates.filter(showUpdate);
+  if (ups.length) {
+    html += '<ul class="tip-steps">';
+    for (const u of ups) {
+      const body = u.body.length > 150 ? u.body.slice(0, 150) + '…' : u.body;
+      html += `<li><span class="s">${escapeHtml(INCIDENT_STATUS[u.status] || u.status)}</span> ` +
+        `<span class="b">${escapeHtml(body)}</span></li>`;
     }
-    html += '</div>';
+    html += '</ul>';
+  } else {
+    html += `<div class="muted" style="margin-top:4px">Продолжался · статус: ${escapeHtml(INCIDENT_STATUS[inc.status] || inc.status)}</div>`;
+  }
+  return html + '</div>';
+}
+
+function tickTooltip(ds) {
+  if (ds.gran === '24h') {
+    const start = new Date(ds.ts);
+    const label = start.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    let html = headHtml(label, ds.status, ds.uptime);
+    const s = start.getTime();
+    const e = s + 3600000;
+    for (const inc of incidentsInRange(ds.key, s, e)) {
+      html += stepsHtml(inc, (u) => { const t = Date.parse(u.created_at); return t >= s && t < e; });
+    }
+    return html;
+  }
+  const date = new Date(ds.ts + 'T00:00:00');
+  const label = date.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' });
+  let html = headHtml(label, ds.status, ds.uptime);
+  for (const inc of incidentsOnDay(ds.key, ds.ts)) {
+    html += stepsHtml(inc, (u) => dayOf(u.created_at) === ds.ts);
   }
   return html;
 }
@@ -100,16 +132,41 @@ function tickTooltip(ds) {
 // ---- рендер ------------------------------------------------------------------
 
 function renderComponent(c) {
+  let entries;
+  let gran;
+  let marked;
+  let pct;
+  if (uptimeGran === '24h') {
+    entries = c.hours || [];
+    gran = '24h';
+    marked = incidentHourSet(c.key, entries);
+  } else {
+    entries = uptimeGran === '30d' ? c.days.slice(-30) : c.days;
+    gran = 'day';
+    marked = incidentDates(c.key);
+  }
+  if (uptimeGran === '90d') {
+    pct = c.uptime;
+  } else {
+    const vals = entries.filter((e) => e.uptime != null).map((e) => e.uptime);
+    pct = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  }
+
   const box = el('div', 'component');
   const row = el('div', 'row');
   const left = el('div');
   left.appendChild(el('div', 'name', escapeHtml(c.name)));
   if (c.description) left.appendChild(el('div', 'desc', escapeHtml(c.description)));
   row.appendChild(left);
-  row.appendChild(el('div', 'pill ' + c.status, escapeHtml(COMPONENT_STATUS[c.status] || c.status)));
+
+  const right = el('div', 'cstatus');
+  right.appendChild(el('div', 'pill ' + c.status, escapeHtml(COMPONENT_STATUS[c.status] || c.status)));
+  if (pct != null) right.appendChild(el('div', 'cuptime', pct.toFixed(2) + '% аптайм'));
+  row.appendChild(right);
   box.appendChild(row);
-  box.appendChild(uptimeBar(c.days, c.key, incidentDates(c.key)));
-  box.appendChild(uptimeMeta(c.days.length, c.uptime));
+
+  box.appendChild(uptimeBar(entries, c.key, gran, marked));
+  box.appendChild(uptimeMeta(gran, entries.length));
   return box;
 }
 
@@ -142,28 +199,34 @@ function renderIncident(inc) {
   return box;
 }
 
-function drawMetrics(grid, seg) {
-  grid.innerHTML = '';
-  metricsData.forEach((m) => grid.appendChild(metricCard(m, metricPeriod)));
-  if (seg) [...seg.children].forEach((b, i) => b.classList.toggle('active', PERIODS[i][0] === metricPeriod));
-}
-
 function metricsSection() {
   const wrap = el('div', 'metrics-wrap');
-  const head = el('div', 'metrics-head');
-  head.appendChild(el('div', 'section-title', 'Метрики'));
+  wrap.appendChild(el('div', 'section-title', 'Метрики'));
+  const grid = el('div', 'metrics-grid');
+  metricsData.forEach((m) => grid.appendChild(metricCard(m, uptimeGran)));
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+function statusHeader() {
+  const wrap = el('div', 'status-header');
+  wrap.appendChild(el('div', 'section-title', 'Состояние сервисов'));
   const seg = el('div', 'seg');
-  PERIODS.forEach(([d, label]) => {
-    const b = el('button', 'seg-btn' + (d === metricPeriod ? ' active' : ''), label);
-    b.onclick = () => { metricPeriod = d; drawMetrics(grid, seg); };
+  UPTIME_GRAN.forEach(([g, label]) => {
+    const b = el('button', 'seg-btn' + (g === uptimeGran ? ' active' : ''), label);
+    b.onclick = () => { uptimeGran = g; if (lastData) render(lastData); };
     seg.appendChild(b);
   });
-  head.appendChild(seg);
-  wrap.appendChild(head);
-  const grid = el('div', 'metrics-grid');
-  wrap.appendChild(grid);
-  drawMetrics(grid, seg);
+  wrap.appendChild(seg);
   return wrap;
+}
+
+function legend() {
+  const items = [['up', 'Работает'], ['partial', 'Замедление'], ['down', 'Сбой'], ['unknown', 'Нет данных']];
+  const l = el('div', 'legend');
+  l.innerHTML = items.map(([k, label]) =>
+    `<span class="leg"><span class="leg-dot u-${k}"></span>${label}</span>`).join('');
+  return l;
 }
 
 function applyBrand() {
@@ -179,6 +242,7 @@ function applyBrand() {
 function render(data) {
   brand = data.brand || {};
   metricsData = data.metrics || [];
+  lastData = data;
   applyBrand();
   buildIndex(data);
   app.innerHTML = '';
@@ -199,6 +263,8 @@ function render(data) {
     data.maintenance.forEach((i) => app.appendChild(renderIncident(i)));
   }
 
+  app.appendChild(statusHeader());
+  app.appendChild(legend());
   for (const g of data.groups) {
     const group = el('div', 'group');
     group.appendChild(el('h2', null, escapeHtml(g.name)));
@@ -267,9 +333,14 @@ if (subscribe) {
 
 // ---- цикл --------------------------------------------------------------------
 
+let lastSig = '';
 async function tick() {
   try {
-    render(await getSummary());
+    const data = await getSummary();
+    const sig = JSON.stringify(data);
+    if (sig === lastSig) return;   // ничего не изменилось — DOM не трогаем
+    lastSig = sig;
+    render(data);
   } catch {
     app.innerHTML = '<p class="empty">Не удалось загрузить статус. Повтор через 30с.</p>';
   }
