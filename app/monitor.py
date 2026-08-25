@@ -108,10 +108,13 @@ def _prune() -> None:
 
 
 async def run_monitor() -> None:
+    last_prune = 0.0
     while True:
         try:
             await _tick()
-            _prune()
+            if time.time() - last_prune > 3600:  # чистка старья раз в час, не каждый тик
+                _prune()
+                last_prune = time.time()
         except Exception as exc:  # noqa: BLE001
             print(f"[monitor] error: {exc}")
         await asyncio.sleep(settings.check_interval)

@@ -1,7 +1,7 @@
 """ORM-модели statuspage. Все таблицы с префиксом status_ — не конфликтуют при переносе."""
 import datetime as dt
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -38,10 +38,12 @@ class Component(Base):
 
 class Check(Base):
     __tablename__ = "status_checks"
+    # составной индекс покрывает агрегации "по компоненту за период"; отдельный ts — для прунинга
+    __table_args__ = (Index("ix_status_checks_comp_ts", "component_id", "ts"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     component_id: Mapped[int] = mapped_column(
-        ForeignKey("status_components.id", ondelete="CASCADE"), index=True
+        ForeignKey("status_components.id", ondelete="CASCADE")
     )
     ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
     ok: Mapped[bool] = mapped_column(Boolean)
