@@ -1,0 +1,20 @@
+{
+  "brand": {
+    "name": "Байтерек · Статус",
+    "title": "Статус сервисов — BI-портал «Байтерек» (демо)",
+    "telegram_url": "https://t.me/baitstatustestbot",
+    "accent": "#18794D",
+    "footer_note": "Демонстрационный стенд статус-портала"
+  },
+  "metrics": ["gateway", "portal-api", "tableau"],
+  "components": [
+    { "key": "gateway",    "name": "Веб-портал",          "group": "Портал",                  "description": "Единая точка входа (live-проверка)", "check_url": "http://127.0.0.1:8088/", "expected_status": 200 },
+    { "key": "frontend",   "name": "Интерфейс",           "group": "Портал",                  "description": "Серверный рендеринг страниц портала" },
+    { "key": "portal-api", "name": "API портала",         "group": "Портал",                  "description": "Каталог, доступы, встраивание BI" },
+    { "key": "auth",       "name": "Аутентификация",      "group": "Портал",                  "description": "Вход и выдача сессий" },
+    { "key": "postgres",   "name": "База данных",          "group": "Данные и инфраструктура", "description": "PostgreSQL", "check_url": "tcp://127.0.0.1:5432" },
+    { "key": "pgbouncer",  "name": "Пул соединений",       "group": "Данные и инфраструктура", "description": "PgBouncer" },
+    { "key": "redis",      "name": "Кэш и сессии",         "group": "Данные и инфраструктура", "description": "Redis", "check_url": "tcp://127.0.0.1:6379" },
+    { "key": "tableau",    "name": "Tableau — встраивание", "group": "Внешние сервисы",         "description": "Источник BI-дашбордов (Connected Apps)" }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "brand": {
+    "name": "Байтерек · Статус",
+    "title": "Статус сервисов — BI-портал «Байтерек»",
+    "logo": null,
+    "support_url": null,
+    "telegram_url": null,
+    "accent": "#18794D",
+    "footer_note": "Внутренний статус-портал холдинга «Байтерек»"
+  },
+  "metrics": ["gateway", "portal-api", "tableau"],
+  "components": [
+    {
+      "key": "gateway",
+      "name": "Веб-портал",
+      "group": "Портал",
+      "description": "Единая точка входа (nginx)",
+      "check_url": "http://gateway:80/",
+      "expected_status": 200
+    },
+    {
+      "key": "frontend",
+      "name": "Интерфейс",
+      "group": "Портал",
+      "description": "Серверный рендеринг страниц портала",
+      "check_url": "http://frontend:5173/health",
+      "expected_status": 200
+    },
+    {
+      "key": "portal-api",
+      "name": "API портала",
+      "group": "Портал",
+      "description": "Каталог, доступы, встраивание BI",
+      "check_url": "http://portal-api:8002/health",
+      "expected_status": 200
+    },
+    {
+      "key": "auth",
+      "name": "Аутентификация",
+      "group": "Портал",
+      "description": "Вход и выдача сессий",
+      "check_url": "http://auth-service:8001/health",
+      "expected_status": 200
+    },
+    {
+      "key": "postgres",
+      "name": "База данных",
+      "group": "Данные и инфраструктура",
+      "description": "PostgreSQL — метаданные портала",
+      "check_url": "tcp://postgres:5432"
+    },
+    {
+      "key": "pgbouncer",
+      "name": "Пул соединений",
+      "group": "Данные и инфраструктура",
+      "description": "PgBouncer",
+      "check_url": "tcp://pgbouncer:5432"
+    },
+    {
+      "key": "redis",
+      "name": "Кэш и сессии",
+      "group": "Данные и инфраструктура",
+      "description": "Redis",
+      "check_url": "tcp://redis:6379"
+    },
+    {
+      "key": "tableau",
+      "name": "Tableau — встраивание",
+      "group": "Внешние сервисы",
+      "description": "Источник BI-дашбордов (Connected Apps)",
+      "check_url": "https://prod-apnortheast-a.online.tableau.com",
+      "expected_status": 200
+    }
+  ]
+}
