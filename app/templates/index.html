@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ brand.title }}</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="/static/css/status.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        {% if brand.logo %}<img src="{{ brand.logo }}" alt="" class="logo">{% endif %}
+        <span>{{ brand.name }}</span>
+      </div>
+      <a id="subscribe" class="btn ghost" hidden>Подписаться</a>
+    </header>
+
+    <main id="app" aria-live="polite">
+      <p class="muted center">Загрузка…</p>
+    </main>
+    <noscript><p class="muted center">Для отображения статуса включите JavaScript.</p></noscript>
+
+    <footer class="foot">
+      <span id="updated" class="muted"></span>
+      {% if brand.support_url %}<a href="{{ brand.support_url }}">Поддержка</a>{% endif %}
+      <a href="/admin" class="muted">Управление</a>
+    </footer>
+  </div>
+  <script type="module" src="/static/js/status.js"></script>
+</body>
+</html>
