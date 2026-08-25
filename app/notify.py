@@ -22,6 +22,12 @@ _IMPACT_LABELS = {
     "major": "серьёзное",
     "critical": "критическое",
 }
+_IMPACT_EMOJI = {
+    "none": "⚪",
+    "minor": "🟡",
+    "major": "🟠",
+    "critical": "🔴",
+}
 
 
 async def _send(chat_id: str, text: str) -> None:
@@ -60,7 +66,7 @@ def _format(inc: Incident) -> str:
     elif inc.type == "maintenance":
         head = "🛠 Плановые работы"
     else:
-        head = "🟠 Инцидент"
+        head = f"{_IMPACT_EMOJI.get(inc.impact, '🟠')} Инцидент"
     last = inc.updates[-1].body if inc.updates else ""
     lines = [
         f"<b>{head}: {html.escape(inc.title)}</b>",
