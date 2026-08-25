@@ -38,10 +38,25 @@ _RANK = {
 
 
 def _iso(value: dt.datetime | None) -> str | None:
-    return value.isoformat() if value else None
+    if not value:
+        return None
+    if value.tzinfo is None:  # SQLite отдаёт naive — считаем это UTC, иначе фронт сдвинет время
+        value = value.replace(tzinfo=dt.timezone.utc)
+    return value.isoformat()
 
 
 # ---- чистые хелперы (тестируются без БД) --------------------------------------
+
+def _live_tick(status: str) -> str:
+    """Статус компонента -> цвет засечки (для текущего бакета без измерений)."""
+    return {
+        "operational": "up",
+        "degraded": "partial",
+        "partial_outage": "partial",
+        "maintenance": "partial",
+        "major_outage": "down",
+    }.get(status, "unknown")
+
 
 def day_status(up: int, total: int) -> tuple[str, float | None]:
     """Статус одного дня по числу успешных/всех проверок."""
@@ -129,6 +144,38 @@ def _day_keys(days: int) -> list[str]:
     return [(today - dt.timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
 
 
+def _hour_key(ts: dt.datetime) -> str:
+    if ts.tzinfo:
+        ts = ts.astimezone(dt.timezone.utc)
+    return ts.strftime("%Y-%m-%dT%H")
+
+
+def _uptime_hours(db: Session, component_id: int, count: int = 24) -> list[dict]:
+    """Почасовая разбивка доступности за последние `count` часов (из реальных проверок)."""
+    since = now() - dt.timedelta(hours=count)
+    rows = db.execute(
+        select(Check.ts, Check.ok).where(
+            Check.component_id == component_id, Check.ts >= since
+        )
+    ).all()
+    buckets: dict[str, tuple[int, int]] = {}
+    for ts, ok in rows:
+        key = _hour_key(ts)
+        up, total = buckets.get(key, (0, 0))
+        buckets[key] = (up + (1 if ok else 0), total + 1)
+
+    base = now().astimezone(dt.timezone.utc).replace(minute=0, second=0, microsecond=0)
+    out: list[dict] = []
+    for i in range(count - 1, -1, -1):
+        hb = base - dt.timedelta(hours=i)
+        up, total = buckets.get(hb.strftime("%Y-%m-%dT%H"), (0, 0))
+        st, frac = day_status(up, total)
+        out.append(
+            {"time": hb.isoformat(), "status": st, "uptime": None if frac is None else round(frac * 100, 3)}
+        )
+    return out
+
+
 def _component_payload(db: Session, comp: Component, days: int) -> dict:
     umap = _uptime_map(db, comp.id, days)
     total_up = total_all = 0
@@ -142,6 +189,12 @@ def _component_payload(db: Session, comp: Component, days: int) -> dict:
             {"date": key, "status": st, "uptime": None if frac is None else round(frac * 100, 3)}
         )
     uptime_pct = round(total_up / total_all * 100, 3) if total_all else None
+    hours = _uptime_hours(db, comp.id)
+    # текущий (последний) бакет без измерений — показать живой статус компонента
+    if day_bars and day_bars[-1]["status"] == "unknown":
+        day_bars[-1]["status"] = _live_tick(comp.status)
+    if hours and hours[-1]["status"] == "unknown":
+        hours[-1]["status"] = _live_tick(comp.status)
     return {
         "key": comp.key,
         "name": comp.name,
@@ -150,6 +203,7 @@ def _component_payload(db: Session, comp: Component, days: int) -> dict:
         "monitored": comp.check_url is not None,
         "uptime": uptime_pct,
         "days": day_bars,
+        "hours": hours,
     }
 
 
@@ -174,9 +228,45 @@ def incident_dict(inc: Incident) -> dict:
     }
 
 
-def _metrics(db: Session, days: int) -> list[dict]:
+def _metric_days(db: Session, component_id: int, days: int) -> list[dict]:
     since = now() - dt.timedelta(days=days)
     day = func.date(Check.ts)
+    rows = db.execute(
+        select(day, func.avg(Check.latency_ms))
+        .where(
+            Check.component_id == component_id,
+            Check.ok.is_(True),
+            Check.latency_ms.is_not(None),
+            Check.ts >= since,
+        )
+        .group_by(day)
+        .order_by(day)
+    ).all()
+    return [
+        {"date": (d if isinstance(d, str) else d.isoformat()), "value": round(float(v), 1)}
+        for d, v in rows
+        if v is not None
+    ]
+
+
+def _metric_recent(db: Session, component_id: int, minutes: int = 120, cap: int = 180) -> list[dict]:
+    """Последние сырые замеры времени ответа — живая линия, рисуется сразу."""
+    since = now() - dt.timedelta(minutes=minutes)
+    rows = db.execute(
+        select(Check.ts, Check.latency_ms)
+        .where(
+            Check.component_id == component_id,
+            Check.ok.is_(True),
+            Check.latency_ms.is_not(None),
+            Check.ts >= since,
+        )
+        .order_by(Check.ts)
+    ).all()
+    pts = [{"time": _iso(ts), "value": round(float(lat), 1)} for ts, lat in rows]
+    return pts[-cap:]
+
+
+def _metrics(db: Session) -> list[dict]:
     out: list[dict] = []
     for key in settings.metric_keys:  # компоненты графиков — из конфига
         comp = db.scalar(
@@ -184,24 +274,12 @@ def _metrics(db: Session, days: int) -> list[dict]:
         )
         if not comp:
             continue
-        rows = db.execute(
-            select(day, func.avg(Check.latency_ms))
-            .where(
-                Check.component_id == comp.id,
-                Check.ok.is_(True),
-                Check.latency_ms.is_not(None),
-                Check.ts >= since,
+        days = _metric_days(db, comp.id, settings.history_days)
+        recent = _metric_recent(db, comp.id)
+        if days or recent:
+            out.append(
+                {"key": comp.key, "name": comp.name, "unit": "мс", "days": days, "recent": recent}
             )
-            .group_by(day)
-            .order_by(day)
-        ).all()
-        points = [
-            {"date": (d if isinstance(d, str) else d.isoformat()), "value": round(float(v), 1)}
-            for d, v in rows
-            if v is not None
-        ]
-        if points:
-            out.append({"key": comp.key, "name": comp.name, "unit": "мс", "points": points})
     return out
 
 
@@ -246,7 +324,7 @@ def get_summary(db: Session) -> dict:
             "footer_note": settings.brand.footer_note,
         },
         "overall": overall(flat, bool(active)),
-        "metrics": _metrics(db, days),
+        "metrics": _metrics(db),
         "groups": [{"name": name, "components": items} for name, items in groups.items()],
         "incidents": [incident_dict(i) for i in active],
         "maintenance": [incident_dict(i) for i in maintenance],
