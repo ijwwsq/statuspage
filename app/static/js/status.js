@@ -226,30 +226,6 @@ function applyBrand() {
   }
 }
 
-function kpiTiles(data) {
-  const comps = data.groups.flatMap((g) => g.components);
-  const up = comps.filter((c) => c.status === 'operational').length;
-  const upVals = comps.map((c) => c.uptime).filter((v) => v != null);
-  const avgUptime = upVals.length ? upVals.reduce((a, b) => a + b, 0) / upVals.length : null;
-  const rtVals = (data.metrics || [])
-    .map((m) => (m.recent && m.recent.length ? m.recent[m.recent.length - 1].value : null))
-    .filter((v) => v != null);
-  const avgRt = rtVals.length ? rtVals.reduce((a, b) => a + b, 0) / rtVals.length : null;
-
-  const tiles = [
-    ['Аптайм', avgUptime == null ? '—' : avgUptime.toFixed(2) + '%'],
-    ['Сервисы онлайн', up + ' / ' + comps.length],
-    ['Активные инциденты', String(data.incidents.length)],
-    ['Ср. время ответа', avgRt == null ? '—' : Math.round(avgRt) + ' мс'],
-  ];
-  const row = el('div', 'kpis');
-  tiles.forEach(([label, val]) => {
-    row.appendChild(el('div', 'kpi',
-      `<div class="kpi-val">${escapeHtml(val)}</div><div class="kpi-label">${escapeHtml(label)}</div>`));
-  });
-  return row;
-}
-
 function incidentsOnDateAny(date) {
   return allIncidents.filter((inc) => {
     const s = dayOf(inc.created_at);
@@ -385,15 +361,22 @@ function render(data) {
 
 // ---- тултип: делегирование на #app ------------------------------------------
 
-app.addEventListener('mouseover', (e) => {
-  const tick = e.target.closest('.utick');
-  if (tick) { showTip(tickTooltip(tick.dataset), tick.getBoundingClientRect()); return; }
-  const cell = e.target.closest('.cal-cell');
-  if (cell && cell.dataset.calDate) { showTip(calTooltip(cell.dataset), cell.getBoundingClientRect()); }
-});
+function showTipFor(target) {
+  const tick = target.closest('.utick');
+  if (tick && tick.dataset.ts) { showTip(tickTooltip(tick.dataset), tick.getBoundingClientRect()); return true; }
+  const cell = target.closest('.cal-cell');
+  if (cell && cell.dataset.calDate) { showTip(calTooltip(cell.dataset), cell.getBoundingClientRect()); return true; }
+  return false;
+}
+app.addEventListener('mouseover', (e) => { showTipFor(e.target); });
 app.addEventListener('mouseout', (e) => {
   if (e.target.closest('.utick') || e.target.closest('.cal-cell')) hideTip();
 });
+// тап на мобилке: показать по клику, скрыть по тапу вне
+app.addEventListener('click', (e) => { if (!showTipFor(e.target)) hideTip(); });
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.utick, .cal-cell, .tip')) hideTip();
+}, true);
 window.addEventListener('scroll', hideTip, { passive: true });
 
 // ---- подписка ---------------------------------------------------------------
