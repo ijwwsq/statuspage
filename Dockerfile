@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY config.json ./config.json
+COPY seed_demo.py ./seed_demo.py
 
 EXPOSE 8090
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8090"]
