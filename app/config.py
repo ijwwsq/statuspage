@@ -56,6 +56,7 @@ class Settings:
     telegram_webhook_secret: str | None
     telegram_poll: bool
     telegram_seed_chat_ids: list[str]
+    telegram_admin_chat_ids: list[str]
     public_base_url: str | None
     cookie_secure: bool
     metric_keys: list[str]
@@ -90,6 +91,9 @@ def load_settings() -> Settings:
         components.append(cd)
 
     seed = _env("STATUS_TELEGRAM_CHAT_IDS", "") or ""
+    seed_ids = [x.strip() for x in seed.split(",") if x.strip()]
+    admin_seed = _env("STATUS_TELEGRAM_ADMIN_CHAT_IDS", "") or ""
+    admin_ids = [x.strip() for x in admin_seed.split(",") if x.strip()] or seed_ids
     return Settings(
         database_url=_env("STATUS_DATABASE_URL", "sqlite:///./data/statuspage.db"),
         admin_token=_env("STATUS_ADMIN_TOKEN", "change-me"),
@@ -100,7 +104,8 @@ def load_settings() -> Settings:
         telegram_bot_token=_env("STATUS_TELEGRAM_BOT_TOKEN") or None,
         telegram_webhook_secret=_env("STATUS_TELEGRAM_WEBHOOK_SECRET") or None,
         telegram_poll=(_env("STATUS_TELEGRAM_POLL", "false") or "").lower() in ("1", "true", "yes"),
-        telegram_seed_chat_ids=[x.strip() for x in seed.split(",") if x.strip()],
+        telegram_seed_chat_ids=seed_ids,
+        telegram_admin_chat_ids=admin_ids,
         public_base_url=_env("STATUS_PUBLIC_BASE_URL") or None,
         cookie_secure=(_env("STATUS_COOKIE_SECURE", "false") or "").lower() in ("1", "true", "yes"),
         metric_keys=data.get("metrics") or ["gateway", "portal-api", "tableau"],
