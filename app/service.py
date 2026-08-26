@@ -266,6 +266,26 @@ def _metric_recent(db: Session, component_id: int, minutes: int = 120, cap: int 
     return pts[-cap:]
 
 
+def _calendar(db: Session, days: int) -> list[dict]:
+    """Системный аптайм по дням (все компоненты вместе) — для календаря в стиле GitHub."""
+    since = now() - dt.timedelta(days=days)
+    day = func.date(Check.ts)
+    rows = db.execute(
+        select(day, func.count(), func.sum(case((Check.ok, 1), else_=0)))
+        .where(Check.ts >= since)
+        .group_by(day)
+    ).all()
+    umap: dict[str, tuple[int, int]] = {}
+    for d, total, up in rows:
+        key = d if isinstance(d, str) else d.isoformat()
+        umap[key] = (int(up or 0), int(total or 0))
+    out: list[dict] = []
+    for key in _day_keys(days):
+        up, total = umap.get(key, (0, 0))
+        out.append({"date": key, "uptime": round(up / total * 100, 3) if total else None})
+    return out
+
+
 def _metrics(db: Session) -> list[dict]:
     out: list[dict] = []
     for key in settings.metric_keys:  # компоненты графиков — из конфига
@@ -324,6 +344,7 @@ def get_summary(db: Session) -> dict:
             "footer_note": settings.brand.footer_note,
         },
         "overall": overall(flat, bool(active)),
+        "calendar": _calendar(db, min(days, 119)),
         "metrics": _metrics(db),
         "groups": [{"name": name, "components": items} for name, items in groups.items()],
         "incidents": [incident_dict(i) for i in active],
@@ -441,6 +462,24 @@ def auto_resolve_incident(db: Session, comp: Component) -> Incident | None:
     db.commit()
     db.refresh(inc)
     return inc
+
+
+def is_under_maintenance(db: Session, component_id) -> bool:
+    """Есть ли активные плановые работы, покрывающие компонент (или глобальные)."""
+    for inc in db.scalars(
+        select(Incident).where(Incident.type == "maintenance", Incident.status != "resolved")
+    ).all():
+        if not inc.components:  # работы без привязки к компонентам = глобальные, гасят всё
+            return True
+        if any(link.component_id == component_id for link in inc.components):
+            return True
+    return False
+
+
+def latest_open_incident(db: Session) -> Incident | None:
+    return db.scalar(
+        select(Incident).where(Incident.status != "resolved").order_by(Incident.created_at.desc())
+    )
 
 
 def list_incidents(db: Session) -> list[dict]:
