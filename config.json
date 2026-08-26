@@ -8,7 +8,7 @@
     "accent": "#18794D",
     "footer_note": "Внутренний статус-портал холдинга «Байтерек»"
   },
-  "metrics": ["gateway", "portal-api", "tableau"],
+  "metrics": ["gateway", "portal-api", "auth", "postgres", "tableau"],
   "components": [
     {
       "key": "gateway",
