@@ -2,7 +2,6 @@
 import { getSummary, escapeHtml, fmtTime } from './api.js';
 import { uptimeBar, uptimeMeta } from './uptime.js';
 import { showTip, hideTip } from './tooltip.js';
-import { metricCard } from './metrics.js';
 import { COMPONENT_STATUS, INCIDENT_STATUS, IMPACT } from './labels.js';
 
 const app = document.getElementById('app');
@@ -10,11 +9,13 @@ const updated = document.getElementById('updated');
 const subscribe = document.getElementById('subscribe');
 
 let incidentIndex = new Map();   // key компонента -> [инциденты]
+let allIncidents = [];           // плоский список (для календаря)
 let brand = {};
-let metricsData = [];
-let uptimeGran = '90d';   // единая гранулярность для аптайма и метрик
+let uptimeGran = '90d';   // гранулярность аптайм-полос
+let calSource = 'all';    // источник календаря: 'all' или ключ компонента
 let lastData = null;
 const UPTIME_GRAN = [['24h', '24 часа'], ['30d', '30 дней'], ['90d', '90 дней']];
+const MONTHS_FULL = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 
 function el(tag, cls, html) {
   const n = document.createElement(tag);
@@ -29,6 +30,7 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 function buildIndex(data) {
   incidentIndex = new Map();
   const all = [...data.incidents, ...data.maintenance, ...data.history];
+  allIncidents = all;
   for (const inc of all) {
     for (const c of inc.components) {
       if (!incidentIndex.has(c.key)) incidentIndex.set(c.key, []);
@@ -160,8 +162,9 @@ function renderComponent(c) {
   row.appendChild(left);
 
   const right = el('div', 'cstatus');
-  right.appendChild(el('div', 'pill ' + c.status, escapeHtml(COMPONENT_STATUS[c.status] || c.status)));
-  if (pct != null) right.appendChild(el('div', 'cuptime', pct.toFixed(2) + '% аптайм'));
+  right.appendChild(el('div', 'cstatus-line',
+    `<span class="sdot s-${c.status}"></span><span>${escapeHtml(COMPONENT_STATUS[c.status] || c.status)}</span>`));
+  if (pct != null) right.appendChild(el('div', 'cuptime', pct.toFixed(2) + '%'));
   row.appendChild(right);
   box.appendChild(row);
 
@@ -199,15 +202,6 @@ function renderIncident(inc) {
   return box;
 }
 
-function metricsSection() {
-  const wrap = el('div', 'metrics-wrap');
-  wrap.appendChild(el('div', 'section-title', 'Метрики'));
-  const grid = el('div', 'metrics-grid');
-  metricsData.forEach((m) => grid.appendChild(metricCard(m, uptimeGran)));
-  wrap.appendChild(grid);
-  return wrap;
-}
-
 function statusHeader() {
   const wrap = el('div', 'status-header');
   wrap.appendChild(el('div', 'section-title', 'Состояние сервисов'));
@@ -239,9 +233,128 @@ function applyBrand() {
   }
 }
 
+function kpiTiles(data) {
+  const comps = data.groups.flatMap((g) => g.components);
+  const up = comps.filter((c) => c.status === 'operational').length;
+  const upVals = comps.map((c) => c.uptime).filter((v) => v != null);
+  const avgUptime = upVals.length ? upVals.reduce((a, b) => a + b, 0) / upVals.length : null;
+  const rtVals = (data.metrics || [])
+    .map((m) => (m.recent && m.recent.length ? m.recent[m.recent.length - 1].value : null))
+    .filter((v) => v != null);
+  const avgRt = rtVals.length ? rtVals.reduce((a, b) => a + b, 0) / rtVals.length : null;
+
+  const tiles = [
+    ['Аптайм', avgUptime == null ? '—' : avgUptime.toFixed(2) + '%'],
+    ['Сервисы онлайн', up + ' / ' + comps.length],
+    ['Активные инциденты', String(data.incidents.length)],
+    ['Ср. время ответа', avgRt == null ? '—' : Math.round(avgRt) + ' мс'],
+  ];
+  const row = el('div', 'kpis');
+  tiles.forEach(([label, val]) => {
+    row.appendChild(el('div', 'kpi',
+      `<div class="kpi-val">${escapeHtml(val)}</div><div class="kpi-label">${escapeHtml(label)}</div>`));
+  });
+  return row;
+}
+
+function incidentsOnDateAny(date) {
+  return allIncidents.filter((inc) => {
+    const s = dayOf(inc.created_at);
+    const e = inc.resolved_at ? dayOf(inc.resolved_at) : todayStr();
+    return s && date >= s && date <= e;
+  });
+}
+
+function calLevel(u) {
+  if (u == null) return 'none';
+  if (u >= 99.9) return '4';
+  if (u >= 99) return '3';
+  if (u >= 97) return '2';
+  if (u >= 90) return '1';
+  return '0';
+}
+
+function calTooltip(ds) {
+  const date = new Date(ds.calDate + 'T00:00:00');
+  const label = date.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' });
+  const up = ds.calUp === '' ? 'Нет данных' : Number(ds.calUp).toFixed(2) + '% аптайм';
+  let html = `<div class="tip-date">${escapeHtml(label)}</div><div class="tip-up">${escapeHtml(up)}</div>`;
+  for (const inc of incidentsOnDateAny(ds.calDate)) {
+    const badge = inc.status === 'resolved' ? 'none' : inc.impact;
+    html += `<div class="tip-inc"><div class="t">${escapeHtml(inc.title)}` +
+      `<span class="badge ${badge}">${escapeHtml(INCIDENT_STATUS[inc.status] || inc.status)}</span></div></div>`;
+  }
+  return html;
+}
+
+function calendarSource(data) {
+  if (calSource === 'all') return data.calendar || [];
+  const comp = data.groups.flatMap((g) => g.components).find((c) => c.key === calSource);
+  return comp ? comp.days.map((d) => ({ date: d.date, uptime: d.uptime })) : (data.calendar || []);
+}
+
+function monthBlock(year, month, byDay) {
+  const block = el('div', 'cal-block');
+  const vals = Object.values(byDay).map((d) => d.uptime).filter((v) => v != null);
+  const pct = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  const pctStr = pct == null ? '—' : (pct >= 99.995 ? '100%' : pct.toFixed(2) + '%');
+  block.appendChild(el('div', 'cal-block-head',
+    `<span class="cal-block-title">${MONTHS_FULL[month]} ${year}</span>` +
+    `<span class="cal-block-pct">${pctStr}</span>`));
+
+  const grid = el('div', 'cal-month-grid');
+  const offset = (new Date(year, month, 1).getDay() + 6) % 7;
+  const dim = new Date(year, month + 1, 0).getDate();
+  for (let i = 0; i < offset; i++) grid.appendChild(el('span', 'cal-cell cal-empty'));
+  for (let day = 1; day <= dim; day++) {
+    const d = byDay[day];
+    const c = el('span', 'cal-cell cal-' + (d ? calLevel(d.uptime) : 'none'));
+    if (d) { c.dataset.calDate = d.date; c.dataset.calUp = d.uptime == null ? '' : String(d.uptime); }
+    grid.appendChild(c);
+  }
+  block.appendChild(grid);
+  return block;
+}
+
+function calendarSection(data) {
+  const wrap = el('div', 'cal-wrap');
+  const head = el('div', 'cal-head');
+  head.appendChild(el('div', 'section-title', 'Аптайм'));
+
+  const comps = data.groups.flatMap((g) => g.components);
+  const sel = document.createElement('select');
+  sel.className = 'cal-select';
+  [['all', 'Все сервисы'], ...comps.map((c) => [c.key, c.name])].forEach(([v, label]) => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = label;
+    if (v === calSource) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.onchange = () => { calSource = sel.value; if (lastData) render(lastData); };
+  head.appendChild(sel);
+  wrap.appendChild(head);
+
+  const src = calendarSource(data);
+  if (!src.length) return wrap;
+
+  // сгруппировать по месяцам, показать последние 3
+  const monthsMap = new Map();  // "y-m" -> {y,m,byDay}
+  for (const d of src) {
+    const dt = new Date(d.date + 'T00:00:00');
+    const key = dt.getFullYear() + '-' + dt.getMonth();
+    if (!monthsMap.has(key)) monthsMap.set(key, { y: dt.getFullYear(), m: dt.getMonth(), byDay: {} });
+    monthsMap.get(key).byDay[dt.getDate()] = d;
+  }
+  const months = [...monthsMap.values()].sort((a, b) => (a.y - b.y) || (a.m - b.m)).slice(-3);
+
+  const blocks = el('div', 'cal-blocks');
+  months.forEach((mo) => blocks.appendChild(monthBlock(mo.y, mo.m, mo.byDay)));
+  wrap.appendChild(blocks);
+  return wrap;
+}
+
 function render(data) {
   brand = data.brand || {};
-  metricsData = data.metrics || [];
   lastData = data;
   applyBrand();
   buildIndex(data);
@@ -249,9 +362,8 @@ function render(data) {
 
   const banner = el('div', 'banner ' + data.overall.level);
   banner.appendChild(el('span', 'dot'));
-  const bt = el('div');
-  bt.appendChild(el('h1', null, escapeHtml(data.overall.label)));
-  banner.appendChild(bt);
+  banner.appendChild(el('h1', null, escapeHtml(data.overall.label)));
+  banner.appendChild(el('span', 'banner-time', 'обновлено ' + fmtTime(data.generated_at)));
   app.appendChild(banner);
 
   if (data.incidents.length) {
@@ -274,7 +386,7 @@ function render(data) {
     app.appendChild(group);
   }
 
-  if (metricsData.length) app.appendChild(metricsSection());
+  if ((data.calendar || []).length) app.appendChild(calendarSection(data));
 
   app.appendChild(el('div', 'section-title', `История за ${data.history_days} дней`));
   if (data.history.length) {
@@ -283,18 +395,18 @@ function render(data) {
     app.appendChild(el('div', 'empty', 'Инцидентов за период не было.'));
   }
 
-  updated.textContent = 'Обновлено ' + fmtTime(data.generated_at);
 }
 
 // ---- тултип: делегирование на #app ------------------------------------------
 
 app.addEventListener('mouseover', (e) => {
   const tick = e.target.closest('.utick');
-  if (!tick) return;
-  showTip(tickTooltip(tick.dataset), tick.getBoundingClientRect());
+  if (tick) { showTip(tickTooltip(tick.dataset), tick.getBoundingClientRect()); return; }
+  const cell = e.target.closest('.cal-cell');
+  if (cell && cell.dataset.calDate) { showTip(calTooltip(cell.dataset), cell.getBoundingClientRect()); }
 });
 app.addEventListener('mouseout', (e) => {
-  if (e.target.closest('.utick')) hideTip();
+  if (e.target.closest('.utick') || e.target.closest('.cal-cell')) hideTip();
 });
 window.addEventListener('scroll', hideTip, { passive: true });
 

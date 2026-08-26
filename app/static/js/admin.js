@@ -1,8 +1,11 @@
 // Админка инцидентов. Логин по токену, дальше — создание/обновление инцидентов и ручные статусы.
-import { admin, escapeHtml, fmtTime } from './api.js';
+import { admin, escapeHtml, fmtTime, getSummary } from './api.js';
+import { metricCard } from './metrics.js';
 import { COMPONENT_STATUS, INCIDENT_STATUS, IMPACT } from './labels.js';
 
 const root = document.getElementById('admin');
+let admGran = '90d';
+const ADM_GRAN = [['24h', '24 часа'], ['30d', '30 дней'], ['90d', '90 дней']];
 const opts = (map, sel) => Object.entries(map)
   .map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${escapeHtml(v)}</option>`)
   .join('');
@@ -139,39 +142,40 @@ function componentsCard(components) {
   return card;
 }
 
-function testToolbar(components) {
-  const bar = el('div', 'toolbar');
-  const rand = () => (components.length
-    ? components[Math.floor(Math.random() * components.length)].key : 'gateway');
-  const mk = (label, payload) => {
-    const b = el('button', 'btn small', label);
-    b.onclick = async () => {
-      b.disabled = true;
-      try { await admin('/incidents', { method: 'POST', body: payload() }); } catch (e) { /* noop */ }
-      dashboard();
-    };
-    return b;
-  };
-  bar.appendChild(mk('+ Тестовый инцидент', () => ({
-    title: 'Тестовый инцидент · ' + new Date().toLocaleTimeString('ru-RU'),
-    type: 'incident', impact: 'minor', status: 'investigating',
-    body: 'Автосозданный инцидент для проверки витрины и уведомлений.',
-    component_keys: [rand()],
-  })));
-  bar.appendChild(mk('+ Тестовые работы', () => ({
-    title: 'Тестовые плановые работы',
-    type: 'maintenance', impact: 'minor', status: 'investigating',
-    body: 'Проверочное окно плановых работ.',
-    component_keys: [rand()],
-  })));
-  return bar;
+async function refreshMetrics(grid, seg) {
+  grid.innerHTML = '';
+  try {
+    const data = await getSummary();
+    const ms = data.metrics || [];
+    if (ms.length) ms.forEach((m) => grid.appendChild(metricCard(m, admGran)));
+    else grid.appendChild(el('div', 'muted', 'Метрик пока нет.'));
+  } catch (e) {
+    grid.innerHTML = '<div class="err">Не удалось загрузить метрики.</div>';
+  }
+  if (seg) [...seg.children].forEach((b, i) => b.classList.toggle('active', ADM_GRAN[i][0] === admGran));
+}
+
+async function metricsPanel() {
+  const card = el('div', 'card');
+  card.appendChild(el('h3', null, 'Время ответа'));
+  const seg = el('div', 'seg mt');
+  ADM_GRAN.forEach(([g, label]) => {
+    const b = el('button', 'seg-btn' + (g === admGran ? ' active' : ''), label);
+    b.onclick = () => { admGran = g; refreshMetrics(grid, seg); };
+    seg.appendChild(b);
+  });
+  card.appendChild(seg);
+  const grid = el('div', 'metrics-grid mt');
+  card.appendChild(grid);
+  await refreshMetrics(grid, seg);
+  return card;
 }
 
 async function dashboard() {
   try {
     const [components, incidents] = await Promise.all([admin('/components'), admin('/incidents')]);
     root.innerHTML = '';
-    root.appendChild(testToolbar(components));
+    root.appendChild(await metricsPanel());
     root.appendChild(incidentForm(components));
     root.appendChild(componentsCard(components));
     root.appendChild(el('div', 'section-title', 'Инциденты'));

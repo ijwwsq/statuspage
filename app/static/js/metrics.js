@@ -75,7 +75,17 @@ export function metricCard(metric, gran) {
     return card;
   }
 
-  card.appendChild(chartSvg(points.map((p) => p.value)));
+  const vals = points.map((p) => p.value);
+  card.appendChild(chartSvg(vals));
+
+  const mn = Math.min(...vals);
+  const mx = Math.max(...vals);
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  card.appendChild(Object.assign(document.createElement('div'), {
+    className: 'metric-stats',
+    innerHTML: `<span>мин ${Math.round(mn)}</span><span>сред ${Math.round(avg)}</span>` +
+      `<span>макс ${Math.round(mx)} ${escapeHtml(metric.unit)}</span>`,
+  }));
 
   const fmt = points[0].live ? shortTime : shortDate;
   const xr = document.createElement('div');
