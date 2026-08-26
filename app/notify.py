@@ -6,6 +6,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import cache
 from .config import settings
 from .db import SessionLocal
 from .models import Incident, Subscriber
@@ -30,23 +31,37 @@ _IMPACT_EMOJI = {
 }
 
 
-async def _send(chat_id: str, text: str) -> None:
+async def _api(method: str, payload: dict) -> None:
     if not settings.telegram_bot_token:
         return
-    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/{method}"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(
-                url,
-                json={
-                    "chat_id": chat_id,
-                    "text": text,
-                    "parse_mode": "HTML",
-                    "disable_web_page_preview": True,
-                },
-            )
+            await client.post(url, json=payload)
     except Exception as exc:  # noqa: BLE001
-        print(f"[notify] telegram send failed: {exc}")
+        print(f"[notify] telegram {method} failed: {exc}")
+
+
+async def _send(chat_id: str, text: str, markup: dict | None = None) -> None:
+    p = {"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
+    if markup:
+        p["reply_markup"] = markup
+    await _api("sendMessage", p)
+
+
+async def _edit(chat_id: str, message_id, text: str, markup: dict | None = None) -> None:
+    p = {"chat_id": chat_id, "message_id": message_id, "text": text,
+         "parse_mode": "HTML", "disable_web_page_preview": True}
+    if markup:
+        p["reply_markup"] = markup
+    await _api("editMessageText", p)
+
+
+async def _answer(cq_id: str, text: str | None = None) -> None:
+    p = {"callback_query_id": cq_id}
+    if text:
+        p["text"] = text
+    await _api("answerCallbackQuery", p)
 
 
 def _fmt_duration(seconds: float) -> str:
@@ -122,7 +137,8 @@ _COMP_LABELS = {
     "major_outage": "сбой", "maintenance": "работы", "unknown": "нет данных",
 }
 _HELP = (
-    "Админ-команды:\n"
+    "Команды:\n"
+    "/status — сводка + панель управления кнопками\n"
     "/components — список и статусы\n"
     "/up /down /degraded /partial /maint /auto <ключ> — статус компонента\n"
     "/incident [minor|major|critical] <заголовок> — завести инцидент\n"
@@ -135,6 +151,91 @@ _HELP = (
 
 def _st(status: str) -> str:
     return _COMP_LABELS.get(status, status)
+
+
+_COMP_EMOJI = {"operational": "🟢", "degraded": "🟡", "partial_outage": "🟠",
+               "major_outage": "🔴", "maintenance": "🔵", "unknown": "⚪"}
+_OVERALL_EMOJI = {"operational": "🟢", "minor": "🟡", "major": "🔴", "maintenance": "🔵"}
+_SET_CODE = {"op": "operational", "dg": "degraded", "pt": "partial_outage",
+             "mj": "major_outage", "mn": "maintenance", "au": None}
+
+
+def _status_text(summary: dict) -> str:
+    o = summary["overall"]
+    lines = [f'{_OVERALL_EMOJI.get(o["level"], "⚪")} <b>{html.escape(o["label"])}</b>', ""]
+    for g in summary["groups"]:
+        lines.append(f'<b>{html.escape(g["name"])}</b>')
+        for c in g["components"]:
+            up = "" if c["uptime"] is None else f'  <i>{c["uptime"]:.2f}%</i>'
+            lines.append(f'{_COMP_EMOJI.get(c["status"], "⚪")} {html.escape(c["name"])}{up}')
+        lines.append("")
+    inc = summary.get("incidents", [])
+    if inc:
+        lines.append(f"⚠️ Активные инциденты — {len(inc)}:")
+        lines += [f'• {html.escape(i["title"])}' for i in inc[:5]]
+    else:
+        lines.append("Активных инцидентов нет.")
+    return "\n".join(lines).strip()
+
+
+def _main_kb(is_admin: bool) -> dict:
+    rows = [[{"text": "🔄 Обновить", "callback_data": "rf"}]]
+    if is_admin:
+        rows.append([{"text": "🧩 Компоненты", "callback_data": "cp"},
+                     {"text": "✅ Закрыть инцидент", "callback_data": "rs"}])
+    return {"inline_keyboard": rows}
+
+
+def _comps_kb(components: list[dict]) -> dict:
+    rows = [[{"text": f'{_COMP_EMOJI.get(c["status"], "⚪")} {c["name"]}',
+              "callback_data": f'c:{c["key"]}'}] for c in components]
+    rows.append([{"text": "‹ Назад", "callback_data": "rf"}])
+    return {"inline_keyboard": rows}
+
+
+def _set_kb(key: str) -> dict:
+    opts = [("🟢 Работает", "op"), ("🟡 Замедление", "dg"), ("🔴 Сбой", "mj"),
+            ("🔵 Работы", "mn"), ("↩︎ Авто", "au")]
+    rows = [[{"text": t, "callback_data": f's:{key}:{code}'}] for t, code in opts]
+    rows.append([{"text": "‹ К компонентам", "callback_data": "cp"}])
+    return {"inline_keyboard": rows}
+
+
+async def handle_callback(db: Session, cq: dict) -> None:
+    """Инлайн-кнопки: обновить сводку, менять статусы, закрыть инцидент."""
+    from . import schemas, service
+    data = cq.get("data", "")
+    msg = cq.get("message") or {}
+    chat = str((msg.get("chat") or {}).get("id") or "")
+    mid = msg.get("message_id")
+    is_admin = chat in settings.telegram_admin_chat_ids
+    await _answer(cq.get("id"))
+    if not chat or not mid:
+        return
+
+    def snap():
+        return _status_text(cache.get(lambda: service.get_summary(db)))
+
+    if data == "rf":
+        await _edit(chat, mid, snap(), _main_kb(is_admin))
+    elif not is_admin:
+        return
+    elif data == "cp":
+        await _edit(chat, mid, "Выбери компонент:", _comps_kb(service.list_components(db)))
+    elif data.startswith("c:"):
+        await _edit(chat, mid, f"Статус для «{html.escape(data[2:])}»:", _set_kb(data[2:]))
+    elif data.startswith("s:"):
+        _, key, code = data.split(":", 2)
+        service.set_component_status(db, key, _SET_CODE.get(code))
+        cache.invalidate()
+        await _edit(chat, mid, snap(), _main_kb(is_admin))
+    elif data == "rs":
+        inc = service.latest_open_incident(db)
+        if inc:
+            inc = service.add_update(db, inc.id, schemas.IncidentUpdateCreate(body="Устранено.", status="resolved"))
+            cache.invalidate()
+            await notify_incident(db, inc)
+        await _edit(chat, mid, snap(), _main_kb(is_admin))
 
 
 async def handle_update(db: Session, update: dict) -> None:
@@ -166,6 +267,11 @@ async def handle_update(db: Session, update: dict) -> None:
         ).delete()
         db.commit()
         await _send(chat_id, "Вы отписались от уведомлений.")
+        return
+    if cmd in ("/status", "/menu"):
+        summary = cache.get(lambda: service.get_summary(db))
+        await _send(chat_id, _status_text(summary),
+                    _main_kb(chat_id in settings.telegram_admin_chat_ids))
         return
 
     if chat_id in settings.telegram_admin_chat_ids:
@@ -246,7 +352,10 @@ async def run_poll() -> None:
                 offset = upd["update_id"] + 1
                 with SessionLocal() as db:
                     try:
-                        await handle_update(db, upd)
+                        if "callback_query" in upd:
+                            await handle_callback(db, upd["callback_query"])
+                        else:
+                            await handle_update(db, upd)
                     except Exception as exc:  # noqa: BLE001
                         print(f"[notify] handle error: {exc}")
         except Exception as exc:  # noqa: BLE001
