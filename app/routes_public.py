@@ -1,18 +1,13 @@
 """Публичные роуты: страница, JSON-сводка, Telegram-вебхук."""
-import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from . import notify, service
+from . import cache, notify, service
 from .config import settings
 from .db import SessionLocal
-
-# короткий TTL-кэш сводки: дедуплицирует расчёт при поллинге и множестве зрителей
-_SUMMARY_TTL = 5.0
-_summary_cache: dict = {"ts": 0.0, "data": None}
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -36,11 +31,7 @@ def admin_page(request: Request):
 
 @router.get("/api/summary")
 def api_summary(db=Depends(get_db)):
-    now = time.monotonic()
-    if _summary_cache["data"] is None or now - _summary_cache["ts"] > _SUMMARY_TTL:
-        _summary_cache["data"] = service.get_summary(db)
-        _summary_cache["ts"] = now
-    return JSONResponse(_summary_cache["data"])
+    return JSONResponse(cache.get(lambda: service.get_summary(db)))
 
 
 @router.get("/healthz")
