@@ -87,7 +87,8 @@ async def _tick() -> None:
                 if _fails.get(c["id"], 0) == 0:
                     _down_since[c["id"]] = now()  # первый упавший пинг
                 _fails[c["id"]] = _fails.get(c["id"], 0) + 1
-                if _fails[c["id"]] >= settings.alert_after:
+                # плановые работы гасят авто-инциденты и алерты по этому компоненту
+                if _fails[c["id"]] >= settings.alert_after and not service.is_under_maintenance(db, comp.id):
                     inc = service.auto_open_incident(db, comp, _down_since.get(c["id"]))
                     if inc:
                         to_notify.append(inc.id)
