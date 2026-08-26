@@ -90,13 +90,13 @@ a { color: inherit; text-decoration: none; }
 .sdot.s-maintenance { background: var(--warn); }
 
 /* полоска аптайма — тонкая */
-.ubar { display: grid; grid-auto-flow: column; gap: 2px; margin-top: 14px; height: 26px; }
-.utick { border-radius: 1px; background: var(--none); transition: opacity .1s ease; }
-.utick:hover { opacity: 0.7; }
-.utick.u-up { background: var(--up); }
-.utick.u-partial { background: var(--warn); }
-.utick.u-down { background: var(--down); }
-.utick.u-unknown { background: var(--none); }
+.ubar { display: block; width: 100%; height: 26px; margin-top: 14px; }
+.utick { fill: var(--none); transition: opacity .1s ease; }
+.utick:hover { opacity: 0.75; }
+.utick.u-up { fill: var(--up); }
+.utick.u-partial { fill: var(--warn); }
+.utick.u-down { fill: var(--down); }
+.utick.u-unknown { fill: var(--none); }
 .umeta { display: flex; justify-content: space-between; margin-top: 7px; font-size: 11.5px; color: var(--faint); }
 
 /* тултип */
@@ -106,14 +106,14 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--line-strong); border-radius: 8px;
   box-shadow: 0 6px 20px rgba(20, 20, 15, 0.10); padding: 11px 13px; font-size: 13px; pointer-events: none;
 }
-.tip .tip-date { font-weight: 600; font-size: 12px; }
-.tip .tip-up { color: var(--muted); font-size: 12.5px; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
-.tip .tip-up .dot { width: 7px; height: 7px; border-radius: 50%; }
-.tip .tip-inc { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
-.tip .tip-inc .t { font-weight: 500; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.tip .tip-steps { margin: 6px 0 0; padding: 0; list-style: none; }
-.tip .tip-steps li { padding: 3px 0 3px 11px; border-left: 1px solid var(--line-strong); }
-.tip .tip-steps li .s { font-weight: 600; font-size: 11px; color: var(--muted); }
+.tip .tip-date { font-weight: 600; font-size: 13px; margin-bottom: 9px; }
+.tip .tip-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 9px 11px; background: rgba(28, 28, 22, 0.045); border-radius: 7px; font-size: 13px; }
+.tip .tip-row + .tip-row { margin-top: 5px; }
+.tip .tip-row-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tip .tip-related { margin-top: 12px; }
+.tip .tip-related-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--faint); margin-bottom: 5px; }
+.tip .tip-related-item { font-size: 13px; color: var(--text); }
+.tip .tip-related-item + .tip-related-item { margin-top: 3px; }
 
 /* календарь доступности — помесячные блоки (как на status-страницах) */
 .cal-wrap { margin: 40px 0 0; }

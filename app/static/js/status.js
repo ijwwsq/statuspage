@@ -81,54 +81,47 @@ function incidentHourSet(key, entries) {
   return set;
 }
 
-function headHtml(label, status, uptime) {
-  const dot = { up: 'var(--up)', partial: 'var(--partial)', down: 'var(--down)', unknown: 'var(--unknown)' }[status];
-  let up;
-  if (status === 'unknown') up = 'Нет данных';
-  else if (status === 'up') up = 'Работал штатно · 100%';
-  else up = `${Number(uptime).toFixed(2)}%`;
-  return `<div class="tip-date">${escapeHtml(label)}</div>` +
-    `<div class="tip-up"><span class="dot" style="background:${dot}"></span>${escapeHtml(up)}</div>`;
+function fmtDur(ms) {
+  const total = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return h ? `${h} ч ${m} мин` : `${m} мин`;
 }
 
-function stepsHtml(inc, showUpdate) {
-  const badge = inc.status === 'resolved' ? 'none' : inc.impact;
-  let html = `<div class="tip-inc"><div class="t">${escapeHtml(inc.title)}` +
-    `<span class="badge ${badge}">${escapeHtml(INCIDENT_STATUS[inc.status] || inc.status)}</span></div>`;
-  const ups = inc.updates.filter(showUpdate);
-  if (ups.length) {
-    html += '<ul class="tip-steps">';
-    for (const u of ups) {
-      const body = u.body.length > 150 ? u.body.slice(0, 150) + '…' : u.body;
-      html += `<li><span class="s">${escapeHtml(INCIDENT_STATUS[u.status] || u.status)}</span> ` +
-        `<span class="b">${escapeHtml(body)}</span></li>`;
+// общий вид тултипа (стиль GitHub): дата, подсвеченная строка, «Связанное»
+function tipHtml(label, incidents, normal) {
+  let html = `<div class="tip-date">${escapeHtml(label)}</div>`;
+  if (incidents.length) {
+    for (const inc of incidents) {
+      const end = inc.resolved_at ? Date.parse(inc.resolved_at) : Date.now();
+      const kind = inc.type === 'maintenance' ? 'Работы' : 'Инцидент';
+      html += `<div class="tip-row"><span>${kind}</span>` +
+        `<span class="tip-row-val">${escapeHtml(fmtDur(end - Date.parse(inc.created_at)))}</span></div>`;
     }
-    html += '</ul>';
+    html += '<div class="tip-related"><div class="tip-related-label">Связанное</div>' +
+      incidents.map((i) => `<div class="tip-related-item">${escapeHtml(i.title)}</div>`).join('') +
+      '</div>';
   } else {
-    html += `<div class="muted" style="margin-top:4px">Продолжался · статус: ${escapeHtml(INCIDENT_STATUS[inc.status] || inc.status)}</div>`;
+    html += `<div class="tip-row"><span>${escapeHtml(normal[0])}</span>` +
+      `<span class="tip-row-val">${escapeHtml(normal[1])}</span></div>`;
   }
-  return html + '</div>';
+  return html;
+}
+
+function normalRow(status, uptime) {
+  if (status === 'unknown') return ['Статус', 'нет данных'];
+  return ['Аптайм', status === 'up' ? '100%' : Number(uptime).toFixed(2) + '%'];
 }
 
 function tickTooltip(ds) {
   if (ds.gran === '24h') {
     const start = new Date(ds.ts);
-    const label = start.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-    let html = headHtml(label, ds.status, ds.uptime);
     const s = start.getTime();
-    const e = s + 3600000;
-    for (const inc of incidentsInRange(ds.key, s, e)) {
-      html += stepsHtml(inc, (u) => { const t = Date.parse(u.created_at); return t >= s && t < e; });
-    }
-    return html;
+    const label = start.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return tipHtml(label, incidentsInRange(ds.key, s, s + 3600000), normalRow(ds.status, ds.uptime));
   }
-  const date = new Date(ds.ts + 'T00:00:00');
-  const label = date.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' });
-  let html = headHtml(label, ds.status, ds.uptime);
-  for (const inc of incidentsOnDay(ds.key, ds.ts)) {
-    html += stepsHtml(inc, (u) => dayOf(u.created_at) === ds.ts);
-  }
-  return html;
+  const label = new Date(ds.ts + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+  return tipHtml(label, incidentsOnDay(ds.key, ds.ts), normalRow(ds.status, ds.uptime));
 }
 
 // ---- рендер ------------------------------------------------------------------
@@ -275,16 +268,9 @@ function calLevel(u) {
 }
 
 function calTooltip(ds) {
-  const date = new Date(ds.calDate + 'T00:00:00');
-  const label = date.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' });
-  const up = ds.calUp === '' ? 'Нет данных' : Number(ds.calUp).toFixed(2) + '% аптайм';
-  let html = `<div class="tip-date">${escapeHtml(label)}</div><div class="tip-up">${escapeHtml(up)}</div>`;
-  for (const inc of incidentsOnDateAny(ds.calDate)) {
-    const badge = inc.status === 'resolved' ? 'none' : inc.impact;
-    html += `<div class="tip-inc"><div class="t">${escapeHtml(inc.title)}` +
-      `<span class="badge ${badge}">${escapeHtml(INCIDENT_STATUS[inc.status] || inc.status)}</span></div></div>`;
-  }
-  return html;
+  const label = new Date(ds.calDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+  const normal = ds.calUp === '' ? ['Статус', 'нет данных'] : ['Аптайм', Number(ds.calUp).toFixed(2) + '%'];
+  return tipHtml(label, incidentsOnDateAny(ds.calDate), normal);
 }
 
 function calendarSource(data) {
