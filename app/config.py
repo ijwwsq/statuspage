@@ -52,6 +52,9 @@ class Settings:
     check_timeout: int
     history_days: int
     alert_after: int
+    recover_after: int
+    flap_cooldown: int
+    degraded_ms: int
     telegram_bot_token: str | None
     telegram_webhook_secret: str | None
     telegram_poll: bool
@@ -101,6 +104,9 @@ def load_settings() -> Settings:
         check_timeout=int(_env("STATUS_CHECK_TIMEOUT", "10")),
         history_days=int(_env("STATUS_HISTORY_DAYS", "90")),
         alert_after=int(_env("STATUS_ALERT_AFTER", "3")),
+        recover_after=int(_env("STATUS_RECOVER_AFTER", "2")),
+        flap_cooldown=int(_env("STATUS_FLAP_COOLDOWN", "300")),
+        degraded_ms=int(_env("STATUS_DEGRADED_MS", "1500")),
         telegram_bot_token=_env("STATUS_TELEGRAM_BOT_TOKEN") or None,
         telegram_webhook_secret=_env("STATUS_TELEGRAM_WEBHOOK_SECRET") or None,
         telegram_poll=(_env("STATUS_TELEGRAM_POLL", "false") or "").lower() in ("1", "true", "yes"),
