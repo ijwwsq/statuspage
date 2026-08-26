@@ -6,11 +6,18 @@ export async function getSummary() {
   return r.json();
 }
 
-// Админ-запросы. Кука status_admin ставится при логине; заголовок не нужен.
+function cookie(name) {
+  const hit = document.cookie.split('; ').find((c) => c.startsWith(name + '='));
+  return hit ? decodeURIComponent(hit.split('=')[1]) : '';
+}
+
+// Админ-запросы. Кука status_admin ставится при логине; мутации несут X-CSRF (double-submit).
 export async function admin(path, { method = 'GET', body } = {}) {
+  const headers = body ? { 'Content-Type': 'application/json' } : {};
+  if (method !== 'GET') headers['X-CSRF'] = cookie('status_csrf');
   const r = await fetch('/api/admin' + path, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (r.status === 401) throw new Error('unauthorized');
