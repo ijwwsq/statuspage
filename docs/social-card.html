@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1280px; height: 640px; }
+  body {
+    background: #fcfcfb; color: #1b1b18;
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 74px 84px; position: relative; overflow: hidden;
+  }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  .mark { width: 56px; height: 56px; border-radius: 15px; background: #18794D;
+          display: flex; align-items: center; justify-content: center; }
+  .mark svg { width: 34px; height: 34px; }
+  .word { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; }
+  h1 { font-size: 66px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.04;
+       margin-top: 62px; max-width: 940px; }
+  h1 .g { color: #18794D; }
+  p.sub { font-size: 25px; color: #6d6d63; margin-top: 26px; max-width: 900px; line-height: 1.45; }
+  .chips { display: flex; gap: 12px; margin-top: 40px; }
+  .chip { font-size: 18px; color: #4a4a42; border: 1px solid rgba(28,28,22,0.16);
+          border-radius: 999px; padding: 8px 18px; }
+  .repo { position: absolute; left: 84px; bottom: 60px; font-size: 21px; color: #85857b; }
+  .bars { position: absolute; right: 0; bottom: 0; left: 0; height: 26px; display: flex; gap: 3px;
+          padding: 0 0; }
+  .bars span { flex: 1; background: #3d9a63; }
+  .bars span.w { background: #c2932c; }
+  .bars span.d { background: #cf4b43; }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <div class="mark">
+      <svg viewBox="0 0 28 28" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 14.5 H9 L11.4 8 L15.2 19 L17.6 13 H24"/>
+      </svg>
+    </div>
+    <span class="word">statuspage</span>
+  </div>
+
+  <h1>A <span class="g">self-hosted</span> status page you can drop into any project.</h1>
+  <p class="sub">Active health checks · 90-day uptime history · incidents &amp; maintenance · response-time charts · Telegram alerts — one small FastAPI service.</p>
+
+  <div class="chips">
+    <span class="chip">Python · FastAPI</span>
+    <span class="chip">SQLite / Postgres</span>
+    <span class="chip">Docker-ready</span>
+    <span class="chip">MIT</span>
+  </div>
+
+  <div class="repo">github.com/ijwwsq/statuspage</div>
+  <div class="bars" id="bars"></div>
+  <script>
+    const b = document.getElementById('bars');
+    for (let i = 0; i < 120; i++) {
+      const s = document.createElement('span');
+      const r = Math.random();
+      if (r < 0.02) s.className = 'd'; else if (r < 0.06) s.className = 'w';
+      b.appendChild(s);
+    }
+  </script>
+</body>
+</html>
