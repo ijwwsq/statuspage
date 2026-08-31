@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ brand.title }}</title>
   <meta name="robots" content="noindex">
-  <link rel="stylesheet" href="/static/css/status.css?v=14">
+  <link rel="stylesheet" href="/static/css/status.css?v=16">
 </head>
 <body>
   <div class="wrap">
@@ -14,20 +14,20 @@
         {% if brand.logo %}<img src="{{ brand.logo }}" alt="" class="logo">{% endif %}
         <span>{{ brand.name }}</span>
       </div>
-      <a id="subscribe" class="btn ghost" hidden>Подписаться</a>
+      <a id="subscribe" class="btn ghost" hidden>Subscribe</a>
     </header>
 
     <main id="app" aria-live="polite">
-      <p class="muted center">Загрузка…</p>
+      <p class="muted center">Loading…</p>
     </main>
-    <noscript><p class="muted center">Для отображения статуса включите JavaScript.</p></noscript>
+    <noscript><p class="muted center">Enable JavaScript to view the status page.</p></noscript>
 
     <footer class="foot">
       <span id="updated" class="muted"></span>
-      {% if brand.support_url %}<a href="{{ brand.support_url }}">Поддержка</a>{% endif %}
-      <a href="/admin" class="muted">Управление</a>
+      {% if brand.support_url %}<a href="{{ brand.support_url }}">Support</a>{% endif %}
+      <a href="/admin" class="muted">Admin</a>
     </footer>
   </div>
-  <script type="module" src="/static/js/status.js?v=14"></script>
+  <script type="module" src="/static/js/status.js?v=16"></script>
 </body>
 </html>

@@ -12,16 +12,16 @@ from .db import SessionLocal
 from .models import Incident, Subscriber
 
 _STATUS_LABELS = {
-    "investigating": "Расследуем",
-    "identified": "Причина найдена",
-    "monitoring": "Наблюдаем",
-    "resolved": "Устранено",
+    "investigating": "Investigating",
+    "identified": "Identified",
+    "monitoring": "Monitoring",
+    "resolved": "Resolved",
 }
 _IMPACT_LABELS = {
-    "none": "нет",
-    "minor": "незначительное",
-    "major": "серьёзное",
-    "critical": "критическое",
+    "none": "none",
+    "minor": "minor",
+    "major": "major",
+    "critical": "critical",
 }
 _IMPACT_EMOJI = {
     "none": "⚪",
@@ -67,12 +67,12 @@ async def _answer(cq_id: str, text: str | None = None) -> None:
 def _fmt_duration(seconds: float) -> str:
     seconds = int(seconds)
     if seconds < 60:
-        return f"{seconds} с"
+        return f"{seconds}s"
     minutes, sec = divmod(seconds, 60)
     if minutes < 60:
-        return f"{minutes} мин {sec} с" if sec else f"{minutes} мин"
+        return f"{minutes}m {sec}s" if sec else f"{minutes}m"
     hours, minutes = divmod(minutes, 60)
-    return f"{hours} ч {minutes} мин"
+    return f"{hours}h {minutes}m"
 
 
 _STATUS_EMOJI = {
@@ -82,11 +82,11 @@ _STATUS_EMOJI = {
 
 def _format(inc: Incident) -> str:
     if inc.status == "resolved":
-        head = "✅ <b>Восстановлено</b>"
+        head = "✅ <b>Recovered</b>"
     elif inc.type == "maintenance":
-        head = "🛠 <b>Плановые работы</b>"
+        head = "🛠 <b>Scheduled maintenance</b>"
     else:
-        head = f"{_IMPACT_EMOJI.get(inc.impact, '🟠')} <b>Инцидент</b>"
+        head = f"{_IMPACT_EMOJI.get(inc.impact, '🟠')} <b>Incident</b>"
 
     lines = [head, f"<b>{html.escape(inc.title)}</b>", ""]
 
@@ -96,20 +96,20 @@ def _format(inc: Incident) -> str:
 
     meta = [f"{_STATUS_EMOJI.get(inc.status, '•')} {_STATUS_LABELS.get(inc.status, inc.status)}"]
     if inc.type != "maintenance":
-        meta.append(f"влияние — {_IMPACT_LABELS.get(inc.impact, inc.impact)}")
+        meta.append(f"impact — {_IMPACT_LABELS.get(inc.impact, inc.impact)}")
     lines.append(" · ".join(meta))
 
     if inc.components:
-        lines.append("Затронуто: " + ", ".join(html.escape(c.component.name) for c in inc.components))
+        lines.append("Affected: " + ", ".join(html.escape(c.component.name) for c in inc.components))
 
     if inc.status == "resolved" and inc.created_at and inc.resolved_at:
         downtime = (inc.resolved_at - inc.created_at).total_seconds()
         if downtime > 0:
-            lines.append(f"🕒 Время простоя: {_fmt_duration(downtime)}")
+            lines.append(f"🕒 Downtime: {_fmt_duration(downtime)}")
 
     if settings.public_base_url:
         lines.append("")
-        lines.append(f'<a href="{settings.public_base_url}">Открыть статус-страницу →</a>')
+        lines.append(f'<a href="{settings.public_base_url}">Open the status page →</a>')
 
     return "\n".join(lines)
 
@@ -133,19 +133,19 @@ _COMP_CMD = {
     "/maint": "maintenance",
 }
 _COMP_LABELS = {
-    "operational": "работает", "degraded": "замедление", "partial_outage": "частичный сбой",
-    "major_outage": "сбой", "maintenance": "работы", "unknown": "нет данных",
+    "operational": "operational", "degraded": "degraded", "partial_outage": "partial outage",
+    "major_outage": "major outage", "maintenance": "maintenance", "unknown": "no data",
 }
 _HELP = (
-    "Команды:\n"
-    "/status — сводка + панель управления кнопками\n"
-    "/components — список и статусы\n"
-    "/up /down /degraded /partial /maint /auto <ключ> — статус компонента\n"
-    "/incident [minor|major|critical] <заголовок> — завести инцидент\n"
-    "/maintenance <заголовок> — плановые работы (гасят авто-алерты)\n"
-    "/update <текст> — обновление к последнему инциденту\n"
-    "/resolve — закрыть последний инцидент\n"
-    "/start /stop — подписка на уведомления"
+    "Commands:\n"
+    "/status — summary + inline control panel\n"
+    "/components — list and statuses\n"
+    "/up /down /degraded /partial /maint /auto <key> — component status\n"
+    "/incident [minor|major|critical] <title> — open an incident\n"
+    "/maintenance <title> — scheduled maintenance (suppresses auto-alerts)\n"
+    "/update <text> — add an update to the latest incident\n"
+    "/resolve — close the latest incident\n"
+    "/start /stop — subscribe to notifications"
 )
 
 
@@ -171,33 +171,33 @@ def _status_text(summary: dict) -> str:
         lines.append("")
     inc = summary.get("incidents", [])
     if inc:
-        lines.append(f"⚠️ Активные инциденты — {len(inc)}:")
+        lines.append(f"⚠️ Active incidents — {len(inc)}:")
         lines += [f'• {html.escape(i["title"])}' for i in inc[:5]]
     else:
-        lines.append("Активных инцидентов нет.")
+        lines.append("No active incidents.")
     return "\n".join(lines).strip()
 
 
 def _main_kb(is_admin: bool) -> dict:
-    rows = [[{"text": "🔄 Обновить", "callback_data": "rf"}]]
+    rows = [[{"text": "🔄 Refresh", "callback_data": "rf"}]]
     if is_admin:
-        rows.append([{"text": "🧩 Компоненты", "callback_data": "cp"},
-                     {"text": "✅ Закрыть инцидент", "callback_data": "rs"}])
+        rows.append([{"text": "🧩 Components", "callback_data": "cp"},
+                     {"text": "✅ Resolve incident", "callback_data": "rs"}])
     return {"inline_keyboard": rows}
 
 
 def _comps_kb(components: list[dict]) -> dict:
     rows = [[{"text": f'{_COMP_EMOJI.get(c["status"], "⚪")} {c["name"]}',
               "callback_data": f'c:{c["key"]}'}] for c in components]
-    rows.append([{"text": "‹ Назад", "callback_data": "rf"}])
+    rows.append([{"text": "‹ Back", "callback_data": "rf"}])
     return {"inline_keyboard": rows}
 
 
 def _set_kb(key: str) -> dict:
-    opts = [("🟢 Работает", "op"), ("🟡 Замедление", "dg"), ("🔴 Сбой", "mj"),
-            ("🔵 Работы", "mn"), ("↩︎ Авто", "au")]
+    opts = [("🟢 Operational", "op"), ("🟡 Degraded", "dg"), ("🔴 Outage", "mj"),
+            ("🔵 Maintenance", "mn"), ("↩︎ Auto", "au")]
     rows = [[{"text": t, "callback_data": f's:{key}:{code}'}] for t, code in opts]
-    rows.append([{"text": "‹ К компонентам", "callback_data": "cp"}])
+    rows.append([{"text": "‹ To components", "callback_data": "cp"}])
     return {"inline_keyboard": rows}
 
 
@@ -221,9 +221,9 @@ async def handle_callback(db: Session, cq: dict) -> None:
     elif not is_admin:
         return
     elif data == "cp":
-        await _edit(chat, mid, "Выбери компонент:", _comps_kb(service.list_components(db)))
+        await _edit(chat, mid, "Pick a component:", _comps_kb(service.list_components(db)))
     elif data.startswith("c:"):
-        await _edit(chat, mid, f"Статус для «{html.escape(data[2:])}»:", _set_kb(data[2:]))
+        await _edit(chat, mid, f"Status for “{html.escape(data[2:])}”:", _set_kb(data[2:]))
     elif data.startswith("s:"):
         _, key, code = data.split(":", 2)
         service.set_component_status(db, key, _SET_CODE.get(code))
@@ -232,7 +232,7 @@ async def handle_callback(db: Session, cq: dict) -> None:
     elif data == "rs":
         inc = service.latest_open_incident(db)
         if inc:
-            inc = service.add_update(db, inc.id, schemas.IncidentUpdateCreate(body="Устранено.", status="resolved"))
+            inc = service.add_update(db, inc.id, schemas.IncidentUpdateCreate(body="Resolved.", status="resolved"))
             cache.invalidate()
             await notify_incident(db, inc)
         await _edit(chat, mid, snap(), _main_kb(is_admin))
@@ -258,15 +258,15 @@ async def handle_update(db: Session, update: dict) -> None:
         if not exists:
             db.add(Subscriber(channel="telegram", target=chat_id))
             db.commit()
-        extra = "\n\nВы админ — /help для управления." if chat_id in settings.telegram_admin_chat_ids else ""
-        await _send(chat_id, "Вы подписаны на уведомления о статусе. /stop — отписаться." + extra)
+        extra = "\n\nYou're an admin — /help for controls." if chat_id in settings.telegram_admin_chat_ids else ""
+        await _send(chat_id, "You're subscribed to status notifications. /stop to unsubscribe." + extra)
         return
     if cmd == "/stop":
         db.query(Subscriber).filter(
             Subscriber.channel == "telegram", Subscriber.target == chat_id
         ).delete()
         db.commit()
-        await _send(chat_id, "Вы отписались от уведомлений.")
+        await _send(chat_id, "You've unsubscribed from notifications.")
         return
     if cmd in ("/status", "/menu"):
         summary = cache.get(lambda: service.get_summary(db))
@@ -282,57 +282,57 @@ async def _admin_command(db: Session, chat_id: str, text: str, service, schemas)
     parts = text.split()
     cmd = parts[0].lower()
     args = parts[1:]
-    reply = "Неизвестная команда. /help"
+    reply = "Unknown command. /help"
     try:
         if cmd == "/help":
             reply = _HELP
         elif cmd == "/components":
             rows = service.list_components(db)
-            reply = "Компоненты:\n" + "\n".join(f"• {c['key']} — {_st(c['status'])}" for c in rows)
+            reply = "Components:\n" + "\n".join(f"• {c['key']} — {_st(c['status'])}" for c in rows)
         elif cmd in _COMP_CMD or cmd == "/auto":
             if not args:
-                reply = "Укажи ключ: напр. /down portal-api"
+                reply = "Specify a key, e.g. /down api"
             else:
                 status = None if cmd == "/auto" else _COMP_CMD[cmd]
                 res = service.set_component_status(db, args[0], status)
                 reply = f"{args[0]} → {_st(res['status'])}"
         elif cmd in ("/incident", "/maintenance"):
             if not args:
-                reply = f"Заголовок: напр. {cmd} major База данных недоступна"
+                reply = f"Title, e.g. {cmd} major Database is unavailable"
             else:
                 impact = "major"
                 title_parts = args
                 if args[0].lower() in ("none", "minor", "major", "critical"):
                     impact, title_parts = args[0].lower(), args[1:]
-                title = " ".join(title_parts).strip() or "Инцидент"
+                title = " ".join(title_parts).strip() or "Incident"
                 typ = "maintenance" if cmd == "/maintenance" else "incident"
-                body = "Плановые работы." if typ == "maintenance" else "Инцидент заведён вручную."
+                body = "Scheduled maintenance." if typ == "maintenance" else "Incident opened manually."
                 inc = service.create_incident(db, schemas.IncidentCreate(
                     title=title, body=body, impact=impact, type=typ, status="investigating"))
                 await notify_incident(db, inc)
-                reply = ("🛠 Работы: " if typ == "maintenance" else "Инцидент: ") + title
+                reply = ("🛠 Maintenance: " if typ == "maintenance" else "Incident: ") + title
         elif cmd == "/update":
             body = " ".join(args).strip()
             inc = service.latest_open_incident(db)
             if not inc:
-                reply = "Нет открытых инцидентов."
+                reply = "No open incidents."
             elif not body:
-                reply = "Текст: /update расследуем причину"
+                reply = "Text: /update investigating the root cause"
             else:
                 inc = service.add_update(db, inc.id, schemas.IncidentUpdateCreate(body=body, status=inc.status))
                 await notify_incident(db, inc)
-                reply = "Обновление добавлено."
+                reply = "Update added."
         elif cmd == "/resolve":
             inc = service.latest_open_incident(db)
             if not inc:
-                reply = "Нет открытых инцидентов."
+                reply = "No open incidents."
             else:
                 inc = service.add_update(db, inc.id, schemas.IncidentUpdateCreate(
-                    body="Устранено.", status="resolved"))
+                    body="Resolved.", status="resolved"))
                 await notify_incident(db, inc)
-                reply = f"Закрыто: {inc.title}"
+                reply = f"Closed: {inc.title}"
     except Exception as exc:  # noqa: BLE001
-        reply = f"Ошибка: {str(exc)[:150]}"
+        reply = f"Error: {str(exc)[:150]}"
     await _send(chat_id, reply)
 
 

@@ -1,70 +1,208 @@
-# statuspage — автономная витрина статуса
+<div align="center">
 
-Самописный status page: компоненты, аптайм (90-дневные полоски), инциденты с таймлайном,
-плановые работы, Telegram-уведомления. Один сервис, без внешних зависимостей кроме БД.
-Переносится на другой проект копипастом `services/statuspage/` + правкой `config.json`.
+# statuspage
 
-## Что внутри
+**A self-hosted status page you can drop into any project.**
+Active health-checks, 90-day uptime history, incidents & maintenance, response-time
+charts, and Telegram notifications — one small FastAPI service, no SaaS, no external
+dependencies beyond a database.
 
-- **Активный монитор** — фоновый цикл пингует `check_url` каждого компонента раз в
-  `STATUS_CHECK_INTERVAL` секунд, пишет пробы, считает аптайм по дням, чистит старьё за
-  горизонтом `STATUS_HISTORY_DAYS`.
-- **Компоненты** — задаются в `config.json`, upsert в БД при старте. Компонент без `check_url`
-  (напр. postgres) статус получает только вручную из админки.
-- **Инциденты и работы** — создаются в админке, статусы `investigating → identified →
-  monitoring → resolved`, влияние `none/minor/major/critical`, таймлайн обновлений.
-- **Уведомления** — Telegram: при создании/обновлении инцидента рассылка подписчикам.
-  Подписка через бота (`/start` / `/stop`) на вебхуке или затравкой `STATUS_TELEGRAM_CHAT_IDS`.
-- **Общий статус** — считается из худшего статуса компонентов и наличия активных инцидентов.
+[![CI](https://github.com/ijwwsq/statuspage/actions/workflows/ci.yml/badge.svg)](https://github.com/ijwwsq/statuspage/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-18794D.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3d9a63.svg)](https://www.python.org/)
+[![Docker ready](https://img.shields.io/badge/docker-ready-2496ED.svg)](Dockerfile)
 
-## Запуск
+[English](README.md) · [Русский](README.ru.md)
 
-В составе стека (docker-compose): сервис `statuspage`, порт **8090**.
-Витрина — `http://localhost:8090`, админка — `http://localhost:8090/admin` (вход по
-`STATUS_ADMIN_TOKEN`).
+<img src="docs/screenshot-light.png" alt="statuspage — public status page" width="820">
 
-Локально:
+</div>
+
+---
+
+## Why
+
+Hosted status pages are a subscription for something that is fundamentally a small app:
+ping a few URLs, store the results, draw some bars, post to a chat when something breaks.
+**statuspage is that small app** — self-contained, drop-in, and yours.
+
+- **One service.** FastAPI + SQLAlchemy + Jinja + httpx. No Redis, no Celery, no build step.
+- **Drop-in.** Every table is `status_*`-prefixed; its own auth, its own DB, its own
+  lifecycle. Copy the folder into any project and it minds its own business.
+- **SQLite by default**, Postgres when you need it — schema & indexes are created on
+  boot, no migration tool required.
+- **`docker compose up` → a fully populated demo** in seconds.
+
+## Features
+
+| | |
+|---|---|
+| **Active monitor** | Background loop pings each component's `check_url` (HTTP **or** `tcp://host:port`) on an interval, records probes, and computes daily uptime. |
+| **90-day uptime** | Per-component bars at 24h / 30d / 90d granularity, a GitHub-style monthly calendar, and response-time charts from real probes. |
+| **Auto-incidents** | Opens an incident after N consecutive failures, closes it after N recoveries — with flap protection and maintenance suppression. |
+| **Manual control** | Web admin (token-auth, CSRF, login rate-limit) to post incidents, maintenance windows, and per-component status overrides. |
+| **Degraded detection** | A slow-but-200 response is flagged “Degraded” (amber) instead of a hard outage, using a latency threshold. |
+| **Telegram** | Subscribe via the bot; incident create/update/resolve is pushed to subscribers. Full admin panel *inside* the chat — commands **and** inline buttons. |
+| **Brandable** | Name, title, accent color, logo, footer — all from `config.json` or env. |
+| **Light & dark** | Themes follow the viewer's OS setting; the brand accent applies to both. |
+
+## Screenshots
+
+Dark theme follows the viewer's OS setting:
+
+<div align="center">
+<img src="docs/screenshot-dark.png" alt="Status page in dark theme" width="820">
+</div>
+
+The whole page — live status, a 90-day uptime calendar, and full incident history:
+
+<div align="center">
+<img src="docs/screenshot-full.png" alt="Full status page with uptime calendar and incident history" width="720">
+</div>
+
+## Quickstart
+
+### Demo in one command
 
 ```bash
-cd services/statuspage
+docker compose up
+```
+
+Open **<http://localhost:8090>** — a status page pre-loaded with 90 days of uptime,
+five historical incidents, and a maintenance window. Admin panel at
+**<http://localhost:8090/admin>** (token `demo123`).
+
+### Run locally
+
+```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 STATUS_ADMIN_TOKEN=secret uvicorn app.main:app --port 8090
 ```
 
-## Конфигурация
+Want the demo data locally too?
 
-Компоненты и бренд — `config.json`. Секреты и параметры — env (см. `.env.example`).
-БД по умолчанию — SQLite (`STATUS_DATABASE_URL`), для прода можно указать Postgres.
+```bash
+STATUS_CONFIG_FILE=config.demo.json python seed_demo.py
+```
 
-## Структура
+## Configuration
+
+**Components & branding** live in [`config.json`](config.json).
+**Secrets & tuning** come from environment variables (see [`.env.example`](.env.example)).
+
+```jsonc
+{
+  "brand": {
+    "name": "Acme Cloud · Status",
+    "accent": "#18794D",                       // brand color, applied across the page
+    "logo": "/static/logo.svg"                 // your logo, shown in the header (see below)
+  },
+  "metrics": ["website", "api", "cdn"],        // which components get response-time charts
+  "components": [
+    { "key": "website", "name": "Website", "group": "Platform",
+      "check_url": "https://example.com", "expected_status": 200 },
+    { "key": "database", "name": "Database", "group": "Infrastructure" }
+    //  ^ no check_url → status is set manually from the admin panel
+  ]
+}
+```
+
+### Logo & branding
+
+Point `brand.logo` at any image and it renders in the page header:
+
+- **Bundled file** — drop `logo.svg` (or `.png`) into `app/static/` and set
+  `"logo": "/static/logo.svg"` (the demo ships one this way).
+- **External URL** — `"logo": "https://…/logo.png"` works too.
+- Leave it `null` to show just the brand name.
+
+`accent` recolors the page; `footer_note` adds a line in the footer; `support_url` and
+`telegram_url` add header/footer links. All of it can also be overridden via env
+(`STATUS_BRAND_NAME`, `STATUS_ACCENT`, `STATUS_BRAND_LOGO`, …).
+
+Key environment variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `STATUS_ADMIN_TOKEN` | `change-me` | Admin panel token — **set this in production** |
+| `STATUS_DATABASE_URL` | `sqlite:///./data/statuspage.db` | SQLite file or `postgresql+psycopg2://…` |
+| `STATUS_CHECK_INTERVAL` | `60` | Seconds between health checks |
+| `STATUS_HISTORY_DAYS` | `90` | Retention horizon for probes |
+| `STATUS_ALERT_AFTER` | `3` | Consecutive failures before an auto-incident |
+| `STATUS_RECOVER_AFTER` | `2` | Consecutive successes before auto-resolve |
+| `STATUS_DEGRADED_MS` | `1500` | Slower-than-this 2xx responses are marked “Degraded” |
+| `STATUS_TELEGRAM_BOT_TOKEN` | — | Enables Telegram notifications & bot |
+| `STATUS_COOKIE_SECURE` | `false` | Set `true` behind HTTPS |
+
+Full list with comments: [`.env.example`](.env.example).
+
+## How monitoring works
+
+Every `STATUS_CHECK_INTERVAL` seconds the monitor probes each component with a `check_url`:
+
+- **HTTP/S** — a `GET` (or configured method); `ok` when the status equals `expected_status`.
+- **TCP** — `tcp://host:port`; `ok` when the port accepts a connection (for databases, caches, pools).
+
+Each probe is stored, feeding the uptime bars, the calendar, and the latency charts.
+A component **without** a `check_url` is controlled only from the admin panel — handy for
+things you can't cheaply ping. A manual status always overrides the monitor.
+
+## Telegram
+
+Set `STATUS_TELEGRAM_BOT_TOKEN` and pick a delivery mode:
+
+- **Long-poll** (no public URL needed): `STATUS_TELEGRAM_POLL=true`.
+- **Webhook**: point Telegram at `POST /telegram/webhook/<STATUS_TELEGRAM_WEBHOOK_SECRET>`.
+
+Users `/start` the bot to subscribe. Chats listed in `STATUS_TELEGRAM_ADMIN_CHAT_IDS`
+get an in-chat control panel — `/status` renders a live summary with inline buttons to
+flip component statuses and resolve incidents, plus text commands (`/incident`,
+`/maintenance`, `/update`, `/resolve`, …).
+
+## Deployment notes
+
+- **Postgres in prod:** set `STATUS_DATABASE_URL` to a `postgresql+psycopg2://…` DSN and
+  add `psycopg2-binary` to your image. Tables and indexes are created idempotently on boot.
+- **Single process:** the monitor keeps flap-protection state in memory, so run **one**
+  instance. It's designed to be tiny and vertical, not horizontally sharded.
+- **HTTPS:** set `STATUS_COOKIE_SECURE=true` so admin cookies are marked `Secure`.
+
+## Architecture
 
 ```
 app/
-  config.py       # env + config.json → Settings
-  db.py           # движок (SQLite/Postgres)
-  models.py       # status_* таблицы
-  monitor.py      # активный health-checker
-  notify.py       # Telegram + подписки
-  service.py      # сводка, операции с инцидентами (+ чистые day_status/overall)
-  routes_public.py# витрина, /api/summary, вебхук
-  routes_admin.py # admin-API (токен)
-  main.py         # сборка приложения + lifespan (монитор)
-  templates/      # index.html, admin.html (скелеты)
-  static/js/      # api, labels, uptime, status, admin — чистые ES-модули
-  static/css/     # status.css
-config.json       # компоненты + бренд
+  config.py        # env + config.json → Settings
+  db.py            # engine (SQLite/Postgres), WAL pragmas
+  models.py        # status_* tables
+  monitor.py       # active health-checker + auto-incident logic
+  notify.py        # Telegram notifications, bot commands, inline panel
+  service.py       # summary builder + incident operations (+ pure helpers)
+  cache.py         # short-TTL summary cache with manual invalidation
+  routes_public.py # public page, /api/summary, Telegram webhook
+  routes_admin.py  # token-auth admin API (CSRF, rate-limit)
+  main.py          # app assembly + lifespan (monitor & poller)
+  templates/       # index.html, admin.html
+  static/          # plain ES modules + one CSS file, no build step
+config.json        # components + branding
+config.demo.json   # self-contained demo config (used by seed_demo.py)
+seed_demo.py       # generates 90 days of showcase data
 ```
 
-## Тесты
+## Testing
 
 ```bash
-cd services/statuspage && pytest
+pytest -q
 ```
 
-## Перенос на другой проект
+Pure logic (`day_status`, `overall`) and service operations are covered on in-memory
+SQLite — no network, no external services. CI runs the suite on Python 3.11 & 3.12 and
+smoke-boots the Docker image.
 
-1. Скопировать `services/statuspage/`.
-2. Переписать `config.json` (компоненты, бренд).
-3. Задать env (токен, БД, Telegram).
+## Contributing
 
-Ноль связей с порталом «Байтерек» — своя БД, своя авторизация, свой жизненный цикл.
+Issues and PRs welcome — please keep it lean. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE) © ijwwsq

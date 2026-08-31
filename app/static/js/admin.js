@@ -5,7 +5,7 @@ import { COMPONENT_STATUS, INCIDENT_STATUS, IMPACT } from './labels.js';
 
 const root = document.getElementById('admin');
 let admGran = '90d';
-const ADM_GRAN = [['24h', '24 часа'], ['30d', '30 дней'], ['90d', '90 дней']];
+const ADM_GRAN = [['24h', '24 hours'], ['30d', '30 days'], ['90d', '90 days']];
 const opts = (map, sel) => Object.entries(map)
   .map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${escapeHtml(v)}</option>`)
   .join('');
@@ -20,10 +20,10 @@ function el(tag, cls, html) {
 function loginView(message) {
   root.innerHTML = '';
   const card = el('div', 'card');
-  card.innerHTML = `<h3>Вход</h3>
-    <label>Admin-токен</label>
+  card.innerHTML = `<h3>Sign in</h3>
+    <label>Admin token</label>
     <input id="token" type="password" autocomplete="current-password">
-    <div class="mt"><button class="btn primary" id="do-login">Войти</button></div>
+    <div class="mt"><button class="btn primary" id="do-login">Sign in</button></div>
     ${message ? `<div class="err">${escapeHtml(message)}</div>` : ''}`;
   root.appendChild(card);
   const input = card.querySelector('#token');
@@ -32,7 +32,7 @@ function loginView(message) {
       await admin('/login', { method: 'POST', body: { token: input.value } });
       dashboard();
     } catch {
-      loginView('Неверный токен');
+      loginView('Wrong token');
     }
   };
   card.querySelector('#do-login').onclick = submit;
@@ -42,20 +42,20 @@ function loginView(message) {
 
 function incidentForm(components) {
   const card = el('div', 'card');
-  card.innerHTML = `<h3>Новый инцидент / работы</h3>
-    <label>Заголовок</label><input id="f-title">
+  card.innerHTML = `<h3>New incident / maintenance</h3>
+    <label>Title</label><input id="f-title">
     <div class="field-row mt">
-      <div><label>Тип</label><select id="f-type">
-        <option value="incident">Инцидент</option>
-        <option value="maintenance">Плановые работы</option></select></div>
-      <div><label>Влияние</label><select id="f-impact">${opts(IMPACT, 'minor')}</select></div>
-      <div><label>Статус</label><select id="f-status">${opts(INCIDENT_STATUS, 'investigating')}</select></div>
+      <div><label>Type</label><select id="f-type">
+        <option value="incident">Incident</option>
+        <option value="maintenance">Scheduled maintenance</option></select></div>
+      <div><label>Impact</label><select id="f-impact">${opts(IMPACT, 'minor')}</select></div>
+      <div><label>Status</label><select id="f-status">${opts(INCIDENT_STATUS, 'investigating')}</select></div>
     </div>
-    <label class="mt">Сообщение</label><textarea id="f-body"></textarea>
-    <label class="mt">Затронутые компоненты</label>
+    <label class="mt">Message</label><textarea id="f-body"></textarea>
+    <label class="mt">Affected components</label>
     <div class="checks">${components.map((c) =>
       `<label><input type="checkbox" value="${escapeHtml(c.key)}"> ${escapeHtml(c.name)}</label>`).join('')}</div>
-    <div class="mt"><button class="btn primary" id="f-submit">Опубликовать</button></div>
+    <div class="mt"><button class="btn primary" id="f-submit">Publish</button></div>
     <div id="f-msg"></div>`;
 
   card.querySelector('#f-submit').onclick = async () => {
@@ -69,7 +69,7 @@ function incidentForm(components) {
       component_keys: keys,
     };
     const msg = card.querySelector('#f-msg');
-    if (!body.title || !body.body) { msg.className = 'err'; msg.textContent = 'Заголовок и сообщение обязательны'; return; }
+    if (!body.title || !body.body) { msg.className = 'err'; msg.textContent = 'Title and message are required'; return; }
     try {
       await admin('/incidents', { method: 'POST', body });
       dashboard();
@@ -85,8 +85,8 @@ function updateForm(inc) {
   wrap.innerHTML = `<div class="field-row">
       <div><select class="u-status">${opts(INCIDENT_STATUS, inc.status)}</select></div>
     </div>
-    <textarea class="u-body mt" placeholder="Что нового по инциденту…"></textarea>
-    <div class="mt"><button class="btn">Добавить обновление</button></div>
+    <textarea class="u-body mt" placeholder="What's new on this incident…"></textarea>
+    <div class="mt"><button class="btn">Add update</button></div>
     <div class="u-msg"></div>`;
   wrap.querySelector('button').onclick = async () => {
     const msg = wrap.querySelector('.u-msg');
@@ -94,7 +94,7 @@ function updateForm(inc) {
       status: wrap.querySelector('.u-status').value,
       body: wrap.querySelector('.u-body').value.trim(),
     };
-    if (!body.body) { msg.className = 'err'; msg.textContent = 'Введите текст'; return; }
+    if (!body.body) { msg.className = 'err'; msg.textContent = 'Enter a message'; return; }
     try {
       await admin(`/incidents/${inc.id}/updates`, { method: 'POST', body });
       dashboard();
@@ -110,7 +110,7 @@ function incidentCard(inc) {
       <div class="title">${escapeHtml(inc.title)}</div>
       <span class="badge ${badge}">${escapeHtml(INCIDENT_STATUS[inc.status] || inc.status)}</span>
     </div>
-    <div class="muted">${escapeHtml(IMPACT[inc.impact] || inc.impact)} · создан ${escapeHtml(fmtTime(inc.created_at))}</div>`;
+    <div class="muted">${escapeHtml(IMPACT[inc.impact] || inc.impact)} · created ${escapeHtml(fmtTime(inc.created_at))}</div>`;
   const tl = el('ul', 'timeline');
   [...inc.updates].reverse().forEach((u) => {
     tl.appendChild(el('li', null,
@@ -125,13 +125,13 @@ function incidentCard(inc) {
 
 function componentsCard(components) {
   const card = el('div', 'card');
-  card.innerHTML = '<h3>Ручные статусы компонентов</h3><div class="muted">Пусто = статус берётся из монитора.</div>';
+  card.innerHTML = '<h3>Manual component statuses</h3><div class="muted">Empty = status comes from the monitor.</div>';
   components.forEach((c) => {
     const row = el('div', 'field-row mt');
     row.innerHTML = `<div style="flex:2"><b>${escapeHtml(c.name)}</b>
-        <div class="muted">монитор: ${escapeHtml(COMPONENT_STATUS[c.monitored_status] || c.monitored_status)}</div></div>
+        <div class="muted">monitor: ${escapeHtml(COMPONENT_STATUS[c.monitored_status] || c.monitored_status)}</div></div>
       <div><select class="c-status">
-        <option value="">— авто —</option>${opts(COMPONENT_STATUS, c.manual_status || '')}</select></div>`;
+        <option value="">— auto —</option>${opts(COMPONENT_STATUS, c.manual_status || '')}</select></div>`;
     row.querySelector('.c-status').onchange = async (e) => {
       await admin(`/components/${encodeURIComponent(c.key)}/status`, {
         method: 'POST', body: { status: e.target.value || null },
@@ -148,16 +148,16 @@ async function refreshMetrics(grid, seg) {
     const data = await getSummary();
     const ms = data.metrics || [];
     if (ms.length) ms.forEach((m) => grid.appendChild(metricCard(m, admGran)));
-    else grid.appendChild(el('div', 'muted', 'Метрик пока нет.'));
+    else grid.appendChild(el('div', 'muted', 'No metrics yet.'));
   } catch (e) {
-    grid.innerHTML = '<div class="err">Не удалось загрузить метрики.</div>';
+    grid.innerHTML = '<div class="err">Failed to load metrics.</div>';
   }
   if (seg) [...seg.children].forEach((b, i) => b.classList.toggle('active', ADM_GRAN[i][0] === admGran));
 }
 
 async function metricsPanel() {
   const card = el('div', 'card');
-  card.appendChild(el('h3', null, 'Время ответа'));
+  card.appendChild(el('h3', null, 'Response time'));
   const seg = el('div', 'seg mt');
   ADM_GRAN.forEach(([g, label]) => {
     const b = el('button', 'seg-btn' + (g === admGran ? ' active' : ''), label);
@@ -178,9 +178,9 @@ async function dashboard() {
     root.appendChild(await metricsPanel());
     root.appendChild(incidentForm(components));
     root.appendChild(componentsCard(components));
-    root.appendChild(el('div', 'section-title', 'Инциденты'));
+    root.appendChild(el('div', 'section-title', 'Incidents'));
     if (incidents.length) incidents.forEach((i) => root.appendChild(incidentCard(i)));
-    else root.appendChild(el('div', 'empty', 'Инцидентов пока нет.'));
+    else root.appendChild(el('div', 'empty', 'No incidents yet.'));
   } catch {
     loginView();
   }

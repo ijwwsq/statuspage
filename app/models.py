@@ -17,7 +17,7 @@ class Component(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     key: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(200))
-    group: Mapped[str] = mapped_column(String(120), default="Сервисы")
+    group: Mapped[str] = mapped_column(String(120), default="Services")
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     check_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     method: Mapped[str] = mapped_column(String(10), default="GET")

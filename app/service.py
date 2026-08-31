@@ -74,14 +74,14 @@ def overall(components: list[dict], has_active_incident: bool) -> dict:
     """Общий статус витрины из статусов компонентов и наличия активных инцидентов."""
     worst = max((_RANK.get(c["status"], 0) for c in components), default=0)
     if worst >= _RANK["major_outage"]:
-        return {"level": "major", "label": "Серьёзные сбои в работе"}
+        return {"level": "major", "label": "Major service outage"}
     if worst >= _RANK["degraded"]:
-        return {"level": "minor", "label": "Частичные проблемы в работе"}
+        return {"level": "minor", "label": "Partial service disruption"}
     if has_active_incident:
-        return {"level": "minor", "label": "Есть активный инцидент"}
+        return {"level": "minor", "label": "Active incident"}
     if worst >= _RANK["maintenance"]:
-        return {"level": "maintenance", "label": "Плановые работы"}
-    return {"level": "operational", "label": "Все системы работают"}
+        return {"level": "maintenance", "label": "Scheduled maintenance"}
+    return {"level": "operational", "label": "All systems operational"}
 
 
 # ---- синхронизация из конфига -------------------------------------------------
@@ -298,7 +298,7 @@ def _metrics(db: Session) -> list[dict]:
         recent = _metric_recent(db, comp.id)
         if days or recent:
             out.append(
-                {"key": comp.key, "name": comp.name, "unit": "мс", "days": days, "recent": recent}
+                {"key": comp.key, "name": comp.name, "unit": "ms", "days": days, "recent": recent}
             )
     return out
 
@@ -431,7 +431,7 @@ def auto_open_incident(db: Session, comp: Component, started_at=None) -> Inciden
     if _open_auto_incident(db, comp.id):
         return None
     inc = Incident(
-        title=f"Недоступен: {comp.name}",
+        title=f"Down: {comp.name}",
         type="incident", impact="major", status="investigating", auto=True,
     )
     if started_at:
@@ -440,7 +440,7 @@ def auto_open_incident(db: Session, comp: Component, started_at=None) -> Inciden
     db.flush()
     db.add(IncidentUpdate(
         incident_id=inc.id, status="investigating",
-        body=f"Автоматически обнаружено: «{comp.name}» не отвечает на проверки доступности.",
+        body=f"Automatically detected: “{comp.name}” is not responding to health checks.",
     ))
     db.add(IncidentComponent(incident_id=inc.id, component_id=comp.id))
     db.commit()
@@ -455,7 +455,7 @@ def auto_resolve_incident(db: Session, comp: Component) -> Incident | None:
         return None
     db.add(IncidentUpdate(
         incident_id=inc.id, status="resolved",
-        body=f"Автоматически: «{comp.name}» снова отвечает. Инцидент закрыт.",
+        body=f"Automatic: “{comp.name}” is responding again. Incident closed.",
     ))
     inc.status = "resolved"
     inc.resolved_at = now()

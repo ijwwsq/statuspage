@@ -14,7 +14,7 @@ export function uptimeBar(entries, key, gran, marked) {
   svg.setAttribute('viewBox', `0 0 ${n * unit} ${height}`);
   svg.setAttribute('preserveAspectRatio', 'none');
   svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', 'История доступности');
+  svg.setAttribute('aria-label', 'Availability history');
   entries.forEach((e, i) => {
     const ts = e.date || e.time;
     const rect = document.createElementNS(SVGNS, 'rect');
@@ -37,8 +37,8 @@ export function uptimeBar(entries, key, gran, marked) {
 export function uptimeMeta(gran, count) {
   const meta = document.createElement('div');
   meta.className = 'umeta';
-  const left = gran === '24h' ? `${count} ч назад` : `${count} дней назад`;
-  const right = gran === '24h' ? 'сейчас' : 'сегодня';
+  const left = gran === '24h' ? `${count}h ago` : `${count} days ago`;
+  const right = gran === '24h' ? 'now' : 'today';
   meta.innerHTML = `<span>${escapeHtml(left)}</span><span>${escapeHtml(right)}</span>`;
   return meta;
 }

@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Run tests
+        run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t statuspage:ci .
+      - name: Smoke test (boot + /healthz)
+        run: |
+          docker run -d --name sp -p 8090:8090 -e STATUS_ADMIN_TOKEN=ci statuspage:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8090/healthz; then echo " ok"; exit 0; fi
+            sleep 1
+          done
+          echo "healthz never came up"; docker logs sp; exit 1

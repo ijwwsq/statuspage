@@ -1,20 +1,22 @@
 {
   "brand": {
-    "name": "Байтерек · Статус",
-    "title": "Статус сервисов — BI-портал «Байтерек» (демо)",
-    "telegram_url": "https://t.me/baitstatustestbot",
+    "name": "Acme Cloud · Status",
+    "title": "Acme Cloud — Service Status (demo)",
+    "logo": "/static/logo.svg",
+    "support_url": null,
+    "telegram_url": null,
     "accent": "#18794D",
-    "footer_note": "Демонстрационный стенд статус-портала"
+    "footer_note": null
   },
-  "metrics": ["gateway", "portal-api", "auth", "postgres", "tableau"],
+  "metrics": ["website", "api", "auth", "database", "cdn"],
   "components": [
-    { "key": "gateway",    "name": "Веб-портал",          "group": "Портал",                  "description": "Единая точка входа (live-проверка)", "check_url": "http://127.0.0.1:8088/", "expected_status": 200 },
-    { "key": "frontend",   "name": "Интерфейс",           "group": "Портал",                  "description": "Серверный рендеринг страниц портала" },
-    { "key": "portal-api", "name": "API портала",         "group": "Портал",                  "description": "Каталог, доступы, встраивание BI" },
-    { "key": "auth",       "name": "Аутентификация",      "group": "Портал",                  "description": "Вход и выдача сессий" },
-    { "key": "postgres",   "name": "База данных",          "group": "Данные и инфраструктура", "description": "PostgreSQL", "check_url": "tcp://127.0.0.1:5432" },
-    { "key": "pgbouncer",  "name": "Пул соединений",       "group": "Данные и инфраструктура", "description": "PgBouncer" },
-    { "key": "redis",      "name": "Кэш и сессии",         "group": "Данные и инфраструктура", "description": "Redis", "check_url": "tcp://127.0.0.1:6379" },
-    { "key": "tableau",    "name": "Tableau — встраивание", "group": "Внешние сервисы",         "description": "Источник BI-дашбордов (Connected Apps)" }
+    { "key": "website",  "name": "Website",        "group": "Platform",          "description": "Public site and entry point" },
+    { "key": "api",      "name": "API",            "group": "Platform",          "description": "Core REST/JSON API" },
+    { "key": "auth",     "name": "Authentication", "group": "Platform",          "description": "Sign-in and session issuance" },
+    { "key": "database", "name": "Database",       "group": "Infrastructure",    "description": "PostgreSQL" },
+    { "key": "cache",    "name": "Cache",          "group": "Infrastructure",    "description": "Redis" },
+    { "key": "queue",    "name": "Task Queue",     "group": "Infrastructure",    "description": "Background job broker" },
+    { "key": "cdn",      "name": "CDN",            "group": "External services", "description": "Static and media delivery" },
+    { "key": "email",    "name": "Email Delivery", "group": "External services", "description": "Transactional email" }
   ]
 }

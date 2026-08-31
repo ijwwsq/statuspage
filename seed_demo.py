@@ -15,27 +15,27 @@ from app.service import sync_components
 
 DAYS = 90
 PER_DAY = [0, 4, 8, 12, 16, 20]                     # 6 проверок в день
-BASE = {'gateway': 15, 'frontend': 30, 'portal-api': 40, 'auth': 25,
-        'postgres': 5, 'pgbouncer': 6, 'redis': 4, 'tableau': 200}
+BASE = {'website': 20, 'api': 45, 'auth': 30, 'database': 6,
+        'cache': 4, 'queue': 12, 'cdn': 25, 'email': 60}
 
-# (дней назад, ключ, влияние, заголовок, деталь, весь день down?, часы простоя)
+# (days ago, key, impact, title, detail, full day down?, downtime hours)
 INCIDENTS = [
-    (58, 'portal-api', 'major', 'Сбой API портала', 'Каталог и выдача доступов недоступны', True, 3),
-    (41, 'tableau', 'major', 'Недоступность встраивания Tableau', 'Дашборды не загружаются у пользователей', True, 2),
-    (27, 'redis', 'minor', 'Замедление кэша', 'Рост времени ответа из-за вытеснения по памяти', False, 1),
-    (14, 'gateway', 'major', 'Недоступность веб-портала', 'Портал не открывается — 502 от шлюза', True, 4),
-    (6, 'auth', 'minor', 'Ошибки входа', 'Часть пользователей не могла авторизоваться', False, 1),
+    (58, 'api', 'major', 'API outage', 'A share of requests returned 5xx', True, 3),
+    (41, 'cdn', 'major', 'CDN unavailable', 'Static assets and media failed to load for users', True, 2),
+    (27, 'cache', 'minor', 'Cache slowdown', 'Elevated response times due to memory eviction', False, 1),
+    (14, 'website', 'major', 'Website unavailable', 'The site failed to open — 502 from the load balancer', True, 4),
+    (6, 'auth', 'minor', 'Sign-in errors', 'Some users could not authenticate', False, 1),
 ]
 
 
 def _updates(impact, detail):
     if impact == 'minor':
-        return [('investigating', detail + '. Разбираемся.'),
-                ('resolved', 'Устранено, сервис в норме.')]
-    return [('investigating', detail + '. Расследуем.'),
-            ('identified', 'Причина найдена, применяем исправление.'),
-            ('monitoring', 'Исправление применено, наблюдаем за метриками.'),
-            ('resolved', 'Инцидент устранён, сервис работает штатно.')]
+        return [('investigating', detail + '. Looking into it.'),
+                ('resolved', 'Resolved, the service is back to normal.')]
+    return [('investigating', detail + '. Investigating.'),
+            ('identified', 'Root cause identified, applying a fix.'),
+            ('monitoring', 'Fix applied, monitoring the metrics.'),
+            ('resolved', 'Incident resolved, the service is operating normally.')]
 
 
 def main():
@@ -87,17 +87,22 @@ def main():
 
         # плановые работы (без простоя)
         m_day = (now - dt.timedelta(days=20)).replace(hour=2, minute=0, second=0, microsecond=0)
-        m = Incident(title='Плановое обновление базы данных', type='maintenance',
+        m = Incident(title='Scheduled database upgrade', type='maintenance',
                      impact='minor', status='resolved', auto=False)
         m.created_at = m_day
         m.resolved_at = m_day + dt.timedelta(hours=1, minutes=30)
         db.add(m)
         db.flush()
         db.add(IncidentUpdate(incident_id=m.id, status='investigating',
-                              body='Обновление PostgreSQL. Возможна кратковременная недоступность.', created_at=m_day))
+                              body='PostgreSQL upgrade. Brief unavailability is possible.', created_at=m_day))
         db.add(IncidentUpdate(incident_id=m.id, status='resolved',
-                              body='Работы завершены, БД в штатном режиме.', created_at=m.resolved_at))
-        db.add(IncidentComponent(incident_id=m.id, component_id=cid['postgres']))
+                              body='Maintenance complete, the database is operating normally.', created_at=m.resolved_at))
+        db.add(IncidentComponent(incident_id=m.id, component_id=cid['database']))
+
+        # живой статус: без внешних сервисов монитор молчит — проставляем «работает» вручную,
+        # чтобы демо было зелёным и самодостаточным (иначе все компоненты «нет данных»)
+        for c_id, _ in comps:
+            db.get(Component, c_id).monitored_status = 'operational'
         db.commit()
 
         print(f'seeded: проверок {db.query(Check).count()}, инцидентов {db.query(Incident).count()}')

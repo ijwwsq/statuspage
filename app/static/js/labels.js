@@ -1,24 +1,24 @@
-// Словари статусов. Один источник правды для витрины и админки (и для i18n при переносе).
+// Status dictionaries. Single source of truth for the public page and the admin (and for i18n).
 
 export const COMPONENT_STATUS = {
-  operational: 'Работает',
-  degraded: 'Замедление',
-  partial_outage: 'Частичный сбой',
-  major_outage: 'Сбой',
-  maintenance: 'Обслуживание',
-  unknown: 'Нет данных',
+  operational: 'Operational',
+  degraded: 'Degraded',
+  partial_outage: 'Partial outage',
+  major_outage: 'Major outage',
+  maintenance: 'Maintenance',
+  unknown: 'No data',
 };
 
 export const INCIDENT_STATUS = {
-  investigating: 'Расследуем',
-  identified: 'Причина найдена',
-  monitoring: 'Наблюдаем',
-  resolved: 'Устранено',
+  investigating: 'Investigating',
+  identified: 'Identified',
+  monitoring: 'Monitoring',
+  resolved: 'Resolved',
 };
 
 export const IMPACT = {
-  none: 'Без влияния',
-  minor: 'Незначительное',
-  major: 'Серьёзное',
-  critical: 'Критическое',
+  none: 'None',
+  minor: 'Minor',
+  major: 'Major',
+  critical: 'Critical',
 };

@@ -14,8 +14,9 @@ let brand = {};
 let uptimeGran = '90d';   // гранулярность аптайм-полос
 let calSource = 'all';    // источник календаря: 'all' или ключ компонента
 let lastData = null;
-const UPTIME_GRAN = [['24h', '24 часа'], ['30d', '30 дней'], ['90d', '90 дней']];
-const MONTHS_FULL = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+const UPTIME_GRAN = [['24h', '24 hours'], ['30d', '30 days'], ['90d', '90 days']];
+const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const LOCALE = 'en-US';
 
 function el(tag, cls, html) {
   const n = document.createElement(tag);
@@ -85,7 +86,7 @@ function fmtDur(ms) {
   const total = Math.max(0, Math.round(ms / 60000));
   const h = Math.floor(total / 60);
   const m = total % 60;
-  return h ? `${h} ч ${m} мин` : `${m} мин`;
+  return h ? `${h}h ${m}m` : `${m}m`;
 }
 
 // общий вид тултипа (стиль GitHub): дата, подсвеченная строка, «Связанное»
@@ -94,11 +95,11 @@ function tipHtml(label, incidents, normal) {
   if (incidents.length) {
     for (const inc of incidents) {
       const end = inc.resolved_at ? Date.parse(inc.resolved_at) : Date.now();
-      const kind = inc.type === 'maintenance' ? 'Работы' : 'Инцидент';
+      const kind = inc.type === 'maintenance' ? 'Maintenance' : 'Incident';
       html += `<div class="tip-row"><span>${kind}</span>` +
         `<span class="tip-row-val">${escapeHtml(fmtDur(end - Date.parse(inc.created_at)))}</span></div>`;
     }
-    html += '<div class="tip-related"><div class="tip-related-label">Связанное</div>' +
+    html += '<div class="tip-related"><div class="tip-related-label">Related</div>' +
       incidents.map((i) => `<div class="tip-related-item">${escapeHtml(i.title)}</div>`).join('') +
       '</div>';
   } else {
@@ -109,18 +110,18 @@ function tipHtml(label, incidents, normal) {
 }
 
 function normalRow(status, uptime) {
-  if (status === 'unknown') return ['Статус', 'нет данных'];
-  return ['Аптайм', status === 'up' ? '100%' : Number(uptime).toFixed(2) + '%'];
+  if (status === 'unknown') return ['Status', 'no data'];
+  return ['Uptime', status === 'up' ? '100%' : Number(uptime).toFixed(2) + '%'];
 }
 
 function tickTooltip(ds) {
   if (ds.gran === '24h') {
     const start = new Date(ds.ts);
     const s = start.getTime();
-    const label = start.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const label = start.toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
     return tipHtml(label, incidentsInRange(ds.key, s, s + 3600000), normalRow(ds.status, ds.uptime));
   }
-  const label = new Date(ds.ts + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+  const label = new Date(ds.ts + 'T00:00:00').toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
   return tipHtml(label, incidentsOnDay(ds.key, ds.ts), normalRow(ds.status, ds.uptime));
 }
 
@@ -176,12 +177,12 @@ function renderIncident(inc) {
 
   if (inc.type === 'maintenance' && inc.scheduled_for) {
     box.appendChild(el('div', 'affected',
-      `Запланировано: ${escapeHtml(fmtTime(inc.scheduled_for))}` +
+      `Scheduled: ${escapeHtml(fmtTime(inc.scheduled_for))}` +
       (inc.scheduled_until ? ` — ${escapeHtml(fmtTime(inc.scheduled_until))}` : '')));
   }
   if (inc.components.length) {
     box.appendChild(el('div', 'affected',
-      'Затронуто: ' + inc.components.map((x) => escapeHtml(x.name)).join(', ')));
+      'Affected: ' + inc.components.map((x) => escapeHtml(x.name)).join(', ')));
   }
 
   const tl = el('ul', 'timeline');
@@ -197,7 +198,7 @@ function renderIncident(inc) {
 
 function statusHeader() {
   const wrap = el('div', 'status-header');
-  wrap.appendChild(el('div', 'section-title', 'Состояние сервисов'));
+  wrap.appendChild(el('div', 'section-title', 'Service status'));
   const seg = el('div', 'seg');
   UPTIME_GRAN.forEach(([g, label]) => {
     const b = el('button', 'seg-btn' + (g === uptimeGran ? ' active' : ''), label);
@@ -209,7 +210,7 @@ function statusHeader() {
 }
 
 function legend() {
-  const items = [['up', 'Работает'], ['partial', 'Замедление'], ['down', 'Сбой'], ['unknown', 'Нет данных']];
+  const items = [['up', 'Operational'], ['partial', 'Degraded'], ['down', 'Outage'], ['unknown', 'No data']];
   const l = el('div', 'legend');
   l.innerHTML = items.map(([k, label]) =>
     `<span class="leg"><span class="leg-dot u-${k}"></span>${label}</span>`).join('');
@@ -217,7 +218,7 @@ function legend() {
 }
 
 function applyBrand() {
-  if (brand.accent) document.documentElement.style.setProperty('--blue', brand.accent);
+  if (brand.accent) document.documentElement.style.setProperty('--accent', brand.accent);
   if (brand.footer_note) {
     const foot = document.querySelector('.foot');
     if (foot && !foot.querySelector('.foot-note')) {
@@ -244,8 +245,8 @@ function calLevel(u) {
 }
 
 function calTooltip(ds) {
-  const label = new Date(ds.calDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
-  const normal = ds.calUp === '' ? ['Статус', 'нет данных'] : ['Аптайм', Number(ds.calUp).toFixed(2) + '%'];
+  const label = new Date(ds.calDate + 'T00:00:00').toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
+  const normal = ds.calUp === '' ? ['Status', 'no data'] : ['Uptime', Number(ds.calUp).toFixed(2) + '%'];
   return tipHtml(label, incidentsOnDateAny(ds.calDate), normal);
 }
 
@@ -281,12 +282,12 @@ function monthBlock(year, month, byDay) {
 function calendarSection(data) {
   const wrap = el('div', 'cal-wrap');
   const head = el('div', 'cal-head');
-  head.appendChild(el('div', 'section-title', 'Аптайм'));
+  head.appendChild(el('div', 'section-title', 'Uptime'));
 
   const comps = data.groups.flatMap((g) => g.components);
   const sel = document.createElement('select');
   sel.className = 'cal-select';
-  [['all', 'Все сервисы'], ...comps.map((c) => [c.key, c.name])].forEach(([v, label]) => {
+  [['all', 'All services'], ...comps.map((c) => [c.key, c.name])].forEach(([v, label]) => {
     const o = document.createElement('option');
     o.value = v; o.textContent = label;
     if (v === calSource) o.selected = true;
@@ -325,15 +326,15 @@ function render(data) {
   const banner = el('div', 'banner ' + data.overall.level);
   banner.appendChild(el('span', 'dot'));
   banner.appendChild(el('h1', null, escapeHtml(data.overall.label)));
-  banner.appendChild(el('span', 'banner-time', 'обновлено ' + fmtTime(data.generated_at)));
+  banner.appendChild(el('span', 'banner-time', 'updated ' + fmtTime(data.generated_at)));
   app.appendChild(banner);
 
   if (data.incidents.length) {
-    app.appendChild(el('div', 'section-title', 'Активные инциденты'));
+    app.appendChild(el('div', 'section-title', 'Active incidents'));
     data.incidents.forEach((i) => app.appendChild(renderIncident(i)));
   }
   if (data.maintenance.length) {
-    app.appendChild(el('div', 'section-title', 'Плановые работы'));
+    app.appendChild(el('div', 'section-title', 'Scheduled maintenance'));
     data.maintenance.forEach((i) => app.appendChild(renderIncident(i)));
   }
 
@@ -350,11 +351,11 @@ function render(data) {
 
   if ((data.calendar || []).length) app.appendChild(calendarSection(data));
 
-  app.appendChild(el('div', 'section-title', `История за ${data.history_days} дней`));
+  app.appendChild(el('div', 'section-title', `Incident history · last ${data.history_days} days`));
   if (data.history.length) {
     data.history.forEach((i) => app.appendChild(renderIncident(i)));
   } else {
-    app.appendChild(el('div', 'empty', 'Инцидентов за период не было.'));
+    app.appendChild(el('div', 'empty', 'No incidents in this period.'));
   }
 
 }
@@ -385,19 +386,19 @@ function openSubscribe() {
   const overlay = el('div', 'modal-overlay');
   const url = brand.telegram_url;
   const action = url
-    ? `<a class="btn primary" href="${escapeHtml(url)}" target="_blank" rel="noopener">Открыть бота в Telegram</a>`
-    : `<span class="muted">Бот уведомлений ещё не подключён администратором.</span>`;
+    ? `<a class="btn primary" href="${escapeHtml(url)}" target="_blank" rel="noopener">Open the Telegram bot</a>`
+    : `<span class="muted">The notification bot hasn't been configured by the administrator yet.</span>`;
   overlay.innerHTML =
     `<div class="modal" role="dialog" aria-modal="true">
-      <h3>Уведомления о статусе</h3>
-      <p>Получайте оповещения об инцидентах и восстановлении сервисов в Telegram.</p>
+      <h3>Status notifications</h3>
+      <p>Get alerts about incidents and recoveries in Telegram.</p>
       <ol>
-        <li>Откройте бота уведомлений.</li>
-        <li>Нажмите <b>Старт</b> (команда <code>/start</code>).</li>
-        <li>Готово — уведомления будут приходить автоматически. <code>/stop</code> — отписаться.</li>
+        <li>Open the notification bot.</li>
+        <li>Press <b>Start</b> (the <code>/start</code> command).</li>
+        <li>Done — notifications arrive automatically. <code>/stop</code> to unsubscribe.</li>
       </ol>
       <div class="modal-actions">
-        <button class="btn ghost" data-close>Закрыть</button>
+        <button class="btn ghost" data-close>Close</button>
         ${action}
       </div>
     </div>`;
@@ -423,7 +424,7 @@ async function tick() {
     lastSig = sig;
     render(data);
   } catch {
-    app.innerHTML = '<p class="empty">Не удалось загрузить статус. Повтор через 30с.</p>';
+    app.innerHTML = '<p class="empty">Failed to load status. Retrying in 30s.</p>';
   }
 }
 

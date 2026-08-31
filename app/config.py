@@ -23,7 +23,7 @@ def _env(key: str, default: str | None = None) -> str | None:
 @dataclass
 class Brand:
     name: str = "Status"
-    title: str = "Статус сервисов"
+    title: str = "Service status"
     logo: str | None = None
     support_url: str | None = None
     telegram_url: str | None = None
@@ -36,7 +36,7 @@ class Brand:
 class ComponentDef:
     key: str
     name: str
-    group: str = "Сервисы"
+    group: str = "Services"
     description: str | None = None
     check_url: str | None = None
     method: str = "GET"
@@ -76,7 +76,7 @@ def load_settings() -> Settings:
     b = data.get("brand", {})
     brand = Brand(
         name=_env("STATUS_BRAND_NAME", b.get("name", "Status")),
-        title=_env("STATUS_PAGE_TITLE", b.get("title", "Статус сервисов")),
+        title=_env("STATUS_PAGE_TITLE", b.get("title", "Service status")),
         logo=_env("STATUS_BRAND_LOGO", b.get("logo")),
         support_url=_env("STATUS_SUPPORT_URL", b.get("support_url")),
         telegram_url=_env("STATUS_TELEGRAM_URL", b.get("telegram_url")),
@@ -114,7 +114,7 @@ def load_settings() -> Settings:
         telegram_admin_chat_ids=admin_ids,
         public_base_url=_env("STATUS_PUBLIC_BASE_URL") or None,
         cookie_secure=(_env("STATUS_COOKIE_SECURE", "false") or "").lower() in ("1", "true", "yes"),
-        metric_keys=data.get("metrics") or ["gateway", "portal-api", "tableau"],
+        metric_keys=data.get("metrics") or ["website", "api", "cdn"],
         brand=brand,
         components=components,
     )

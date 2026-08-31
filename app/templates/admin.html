@@ -1,20 +1,20 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Управление · {{ brand.title }}</title>
+  <title>Admin · {{ brand.title }}</title>
   <meta name="robots" content="noindex">
-  <link rel="stylesheet" href="/static/css/status.css">
+  <link rel="stylesheet" href="/static/css/status.css?v=16">
 </head>
 <body>
   <div class="wrap">
     <header class="top">
-      <div class="brand"><span>{{ brand.name }} · управление</span></div>
-      <a href="/" class="btn ghost">← На витрину</a>
+      <div class="brand"><span>{{ brand.name }} · admin</span></div>
+      <a href="/" class="btn ghost">← Back to status</a>
     </header>
-    <main id="admin"><p class="muted center">Загрузка…</p></main>
+    <main id="admin"><p class="muted center">Loading…</p></main>
   </div>
-  <script type="module" src="/static/js/admin.js"></script>
+  <script type="module" src="/static/js/admin.js?v=16"></script>
 </body>
 </html>

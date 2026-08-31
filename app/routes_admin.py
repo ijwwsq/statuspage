@@ -1,4 +1,4 @@
-"""Admin-роуты. Авторизация — независимый токен (STATUS_ADMIN_TOKEN), ноль связей с порталом."""
+"""Admin-роуты. Авторизация — независимый токен (STATUS_ADMIN_TOKEN), ноль связей с приложением-хостом."""
 import hmac
 import secrets
 import time

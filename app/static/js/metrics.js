@@ -7,8 +7,8 @@ const H = 120;
 const PAD_T = 12;
 const PAD_B = 10;
 
-const shortDate = (iso) => new Date(iso + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-const shortTime = (iso) => new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+const shortDate = (iso) => new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+const shortTime = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
 function chartSvg(values) {
   const min = Math.min(...values);
@@ -66,11 +66,11 @@ export function metricCard(metric, gran) {
   card.className = 'metric';
   const cur = points.length ? points[points.length - 1].value : null;
   card.innerHTML =
-    `<div class="metric-head"><span class="metric-name">${escapeHtml(metric.name)} · время ответа</span>` +
+    `<div class="metric-head"><span class="metric-name">${escapeHtml(metric.name)} · response time</span>` +
     `<span class="metric-cur">${cur == null ? '—' : Math.round(cur) + ' ' + escapeHtml(metric.unit)}</span></div>`;
 
   if (points.length < 2) {
-    const note = points.length ? 'Накапливается…' : 'Нет данных';
+    const note = points.length ? 'Collecting…' : 'No data';
     card.appendChild(Object.assign(document.createElement('div'), { className: 'muted metric-empty', textContent: note }));
     return card;
   }
@@ -83,8 +83,8 @@ export function metricCard(metric, gran) {
   const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
   card.appendChild(Object.assign(document.createElement('div'), {
     className: 'metric-stats',
-    innerHTML: `<span>мин ${Math.round(mn)}</span><span>сред ${Math.round(avg)}</span>` +
-      `<span>макс ${Math.round(mx)} ${escapeHtml(metric.unit)}</span>`,
+    innerHTML: `<span>min ${Math.round(mn)}</span><span>avg ${Math.round(avg)}</span>` +
+      `<span>max ${Math.round(mx)} ${escapeHtml(metric.unit)}</span>`,
   }));
 
   const fmt = points[0].live ? shortTime : shortDate;

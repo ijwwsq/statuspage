@@ -34,7 +34,7 @@ export function escapeHtml(s) {
 export function fmtTime(iso) {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleString('ru-RU', {
+    return new Date(iso).toLocaleString('en-US', {
       day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
     });
   } catch { return iso; }
